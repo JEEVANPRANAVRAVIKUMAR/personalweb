@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Engineer OS — 365-Day Development & Mastery Tracker</title>
+  <meta name="description" content="Personal AI Engineering Development Dashboard and 365-Day Study Tracker with doubts knowledge base, spaced revision, and project checkpoints.">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              400: '#60a5fa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            },
+            dark: {
+              950: '#06090e',
+              900: '#0c1017',
+              850: '#121824',
+              800: '#182030',
+              750: '#1f293d',
+              700: '#28354e',
+              border: '#1e293b'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- SheetJS (xlsx parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- React 18 & Babel Standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="./src/styles/main.css">
+</head>
+<body class="bg-[#070a0f] text-slate-100 min-h-screen antialiased selection:bg-blue-600 selection:text-white">
+  <div id="root">
+    <!-- Loading placeholder -->
+    <div class="flex items-center justify-center min-h-screen">
+      <div class="text-center space-y-4">
+        <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <div class="text-lg font-semibold tracking-wide text-slate-300">Initializing AI Engineer OS...</div>
+        <p class="text-sm text-slate-500">Loading 365 days of machine learning, deep learning, LLMs & system design</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data & Service Modules -->
+  <script type="module" src="./src/data/sourcesDataset.js"></script>
+  <script type="module" src="./src/data/projectsDataset.js"></script>
+  <script type="module" src="./src/data/roadmapDataset.js"></script>
+  <script type="module" src="./src/data/dsaDataset.js"></script>
+  <script type="module" src="./src/services/authService.js"></script>
+  <script type="module" src="./src/services/storageService.js"></script>
+  <script type="module" src="./src/services/excelService.js"></script>
+
+  <!-- App Script -->
+  <script type="text/babel" data-type="module" src="./src/components/App.jsx"></script>
+</body>
+</html>
