@@ -1,4 +1,4 @@
-// storageService.js - Unified Persistent Storage Engine with Cloud Database Sync for Vercel
+// storageService.js - Real-World Multi-Device Synchronized Storage Engine
 import { getEnrichedRoadmapDays } from '../data/roadmapDataset.js';
 import { PROJECTS_DATASET, CHECKPOINTS_DATASET } from '../data/projectsDataset.js';
 import { SOURCES_DATASET } from '../data/sourcesDataset.js';
@@ -52,9 +52,11 @@ class StorageService {
     this.lastSyncedAt = null;
     this.activeAdapter = 'local';
     this.syncTimeout = null;
+    this.isPulling = false;
 
     this.listeners = new Set();
     this.init();
+    this.setupMultiDeviceSyncListeners();
   }
 
   init() {
@@ -69,7 +71,7 @@ class StorageService {
         this.days = JSON.parse(rawDays);
       } else {
         this.days = getDays();
-        this.saveDays();
+        this.saveDays(false);
       }
 
       // 2. AI: Load projects
@@ -78,7 +80,7 @@ class StorageService {
         this.projects = JSON.parse(rawProjects);
       } else {
         this.projects = JSON.parse(JSON.stringify(projs));
-        this.saveProjects();
+        this.saveProjects(false);
       }
 
       // 3. AI: Load checkpoints
@@ -94,7 +96,7 @@ class StorageService {
           remarks: "",
           reviewedAt: null
         }));
-        this.saveCheckpoints();
+        this.saveCheckpoints(false);
       }
 
       // 4. AI: Load settings
@@ -122,7 +124,7 @@ class StorageService {
         } else {
           this.dsaProblems = [];
         }
-        if (this.dsaProblems.length > 0) this.saveDsaProblems();
+        if (this.dsaProblems.length > 0) this.saveDsaProblems(false);
       }
 
       // 7. DSA: Load already solved problems
@@ -138,7 +140,7 @@ class StorageService {
         } else {
           this.dsaAlreadySolved = [];
         }
-        if (this.dsaAlreadySolved.length > 0) this.saveDsaAlreadySolved();
+        if (this.dsaAlreadySolved.length > 0) this.saveDsaAlreadySolved(false);
       }
 
       // 8. DSA: Load settings
@@ -155,8 +157,8 @@ class StorageService {
         this.activeAdapter = meta.activeAdapter || 'local';
       }
 
-      // 10. Background initial pull from cloud database
-      setTimeout(() => this.pullCloudSync(), 800);
+      // 10. Initial pull from Cloud Database
+      setTimeout(() => this.pullCloudSync(true), 300);
 
     } catch (e) {
       console.error("StorageService init error:", e);
@@ -165,6 +167,36 @@ class StorageService {
       this.checkpoints = JSON.parse(JSON.stringify(CHECKPOINTS_DATASET));
       this.settings = DEFAULT_AI_SETTINGS;
     }
+  }
+
+  setupMultiDeviceSyncListeners() {
+    if (typeof window === 'undefined') return;
+
+    // Auto-pull whenever user focuses window or returns to tab on another device
+    window.addEventListener('focus', () => {
+      this.pullCloudSync(true);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.pullCloudSync(true);
+      }
+    });
+
+    // Periodic sync every 45 seconds (like Google Docs / Notion)
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        this.pullCloudSync(true);
+      }
+    }, 45000);
+
+    // Flush any pending changes immediately before closing/switching app
+    window.addEventListener('beforeunload', () => {
+      if (this.syncTimeout) {
+        clearTimeout(this.syncTimeout);
+        this.pushCloudSyncSync();
+      }
+    });
   }
 
   subscribe(listener) {
@@ -177,13 +209,13 @@ class StorageService {
       try {
         listener(this);
       } catch (err) {
-        console.error("Storage listener notification error:", err);
+        console.error("Storage listener error:", err);
       }
     }
   }
 
   // ==========================================
-  // CLOUD DATABASE SYNCHRONIZATION ENGINE
+  // REAL-TIME MULTI-DEVICE CLOUD SYNC
   // ==========================================
 
   scheduleCloudSync() {
@@ -191,24 +223,28 @@ class StorageService {
     this.syncState = 'syncing';
     this.notify();
 
+    // Fast 300ms debounce for instant cross-device synchronization
     this.syncTimeout = setTimeout(async () => {
       await this.pushCloudSync();
-    }, 1200);
+    }, 300);
+  }
+
+  getPayload() {
+    return {
+      days: this.days,
+      dsaProblems: this.dsaProblems,
+      dsaAlreadySolved: this.dsaAlreadySolved,
+      doubts: this.getAllDoubtsList(),
+      projects: this.projects,
+      checkpoints: this.checkpoints,
+      settings: { ai: this.settings, dsa: this.dsaSettings },
+      sessions: this.sessions
+    };
   }
 
   async pushCloudSync() {
     try {
-      const payload = {
-        days: this.days,
-        dsaProblems: this.dsaProblems,
-        dsaAlreadySolved: this.dsaAlreadySolved,
-        doubts: this.getAllDoubtsList(),
-        projects: this.projects,
-        checkpoints: this.checkpoints,
-        settings: { ai: this.settings, dsa: this.dsaSettings },
-        sessions: this.sessions
-      };
-
+      const payload = this.getPayload();
       const res = await fetch('/api/sync?username=JeevanPranav', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -228,14 +264,25 @@ class StorageService {
         this.syncState = 'local_fallback';
       }
     } catch (e) {
-      // Offline / local static server
       this.syncState = 'offline';
     } finally {
       this.notify();
     }
   }
 
-  async pullCloudSync() {
+  pushCloudSyncSync() {
+    try {
+      const payload = this.getPayload();
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/sync?username=JeevanPranav', blob);
+      }
+    } catch (e) {}
+  }
+
+  async pullCloudSync(silent = false) {
+    if (this.isPulling) return;
+    this.isPulling = true;
     try {
       const res = await fetch('/api/sync?username=JeevanPranav');
       if (res.ok) {
@@ -244,29 +291,90 @@ class StorageService {
           const cloud = result.data;
           let changed = false;
 
+          // 1. SMART MERGE: AI Days
           if (Array.isArray(cloud.days) && cloud.days.length === 365) {
-            this.days = cloud.days;
-            localStorage.setItem(STORAGE_KEY_DAYS, JSON.stringify(this.days));
-            changed = true;
+            cloud.days.forEach(cloudDay => {
+              const localDay = this.days.find(d => d.day === cloudDay.day);
+              if (localDay) {
+                // If cloud day is COMPLETED or has newer remarks/mastery, apply to local
+                if (cloudDay.status === 'COMPLETED' && localDay.status !== 'COMPLETED') {
+                  localDay.status = 'COMPLETED';
+                  localDay.completedAt = cloudDay.completedAt || new Date().toISOString();
+                  changed = true;
+                } else if (cloudDay.status && cloudDay.status !== localDay.status && localDay.status === 'NOT_STARTED') {
+                  localDay.status = cloudDay.status;
+                  changed = true;
+                }
+
+                if (cloudDay.remarks && cloudDay.remarks !== localDay.remarks) {
+                  localDay.remarks = cloudDay.remarks;
+                  changed = true;
+                }
+                if (cloudDay.notes && cloudDay.notes !== localDay.notes) {
+                  localDay.notes = cloudDay.notes;
+                  changed = true;
+                }
+                if (cloudDay.mastery && cloudDay.mastery !== localDay.mastery) {
+                  localDay.mastery = cloudDay.mastery;
+                  changed = true;
+                }
+                if (Array.isArray(cloudDay.doubts) && cloudDay.doubts.length > (localDay.doubts?.length || 0)) {
+                  localDay.doubts = cloudDay.doubts;
+                  changed = true;
+                }
+              }
+            });
+            if (changed) {
+              localStorage.setItem(STORAGE_KEY_DAYS, JSON.stringify(this.days));
+            }
           }
+
+          // 2. SMART MERGE: DSA Problems
           if (Array.isArray(cloud.dsaProblems) && cloud.dsaProblems.length > 0) {
-            this.dsaProblems = cloud.dsaProblems;
-            localStorage.setItem(STORAGE_KEY_DSA_PROBLEMS, JSON.stringify(this.dsaProblems));
-            changed = true;
+            cloud.dsaProblems.forEach(cloudP => {
+              const localP = this.dsaProblems.find(p => p.id === cloudP.id);
+              if (localP) {
+                if (cloudP.status === 'DONE' && localP.status !== 'DONE') {
+                  localP.status = 'DONE';
+                  localP.dateSolved = cloudP.dateSolved || new Date().toISOString().split('T')[0];
+                  changed = true;
+                } else if (cloudP.status && cloudP.status !== localP.status && localP.status === 'NOT_STARTED') {
+                  localP.status = cloudP.status;
+                  changed = true;
+                }
+
+                if ((cloudP.attempts || 0) > (localP.attempts || 0)) {
+                  localP.attempts = cloudP.attempts;
+                  changed = true;
+                }
+                if (cloudP.notes && cloudP.notes !== localP.notes) {
+                  localP.notes = cloudP.notes;
+                  changed = true;
+                }
+                if (cloudP.mistakes && cloudP.mistakes !== localP.mistakes) {
+                  localP.mistakes = cloudP.mistakes;
+                  changed = true;
+                }
+                if (cloudP.mastery && cloudP.mastery !== localP.mastery) {
+                  localP.mastery = cloudP.mastery;
+                  changed = true;
+                }
+              }
+            });
+            if (changed) {
+              localStorage.setItem(STORAGE_KEY_DSA_PROBLEMS, JSON.stringify(this.dsaProblems));
+            }
           }
+
+          // 3. Projects & Checkpoints Merge
           if (Array.isArray(cloud.projects) && cloud.projects.length > 0) {
             this.projects = cloud.projects;
             localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(this.projects));
             changed = true;
           }
-          if (cloud.settings?.ai) {
-            this.settings = { ...this.settings, ...cloud.settings.ai };
-            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
-            changed = true;
-          }
-          if (cloud.settings?.dsa) {
-            this.dsaSettings = { ...this.dsaSettings, ...cloud.settings.dsa };
-            localStorage.setItem(STORAGE_KEY_DSA_SETTINGS, JSON.stringify(this.dsaSettings));
+          if (Array.isArray(cloud.checkpoints) && cloud.checkpoints.length > 0) {
+            this.checkpoints = cloud.checkpoints;
+            localStorage.setItem(STORAGE_KEY_CHECKPOINTS, JSON.stringify(this.checkpoints));
             changed = true;
           }
 
@@ -283,7 +391,9 @@ class StorageService {
       }
     } catch (e) {
       this.syncState = 'offline';
-      this.notify();
+      if (!silent) this.notify();
+    } finally {
+      this.isPulling = false;
     }
   }
 
@@ -308,31 +418,31 @@ class StorageService {
   // ==========================================
   // AI ENGINEER TRACK METHODS
   // ==========================================
-  saveDays() {
+  saveDays(shouldSync = true) {
     try {
       localStorage.setItem(STORAGE_KEY_DAYS, JSON.stringify(this.days));
       this.notify();
-      this.scheduleCloudSync();
+      if (shouldSync) this.scheduleCloudSync();
     } catch (e) {
       console.error("Failed to save AI days to localStorage:", e);
     }
   }
 
-  saveProjects() {
+  saveProjects(shouldSync = true) {
     try {
       localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(this.projects));
       this.notify();
-      this.scheduleCloudSync();
+      if (shouldSync) this.scheduleCloudSync();
     } catch (e) {
       console.error("Failed to save AI projects:", e);
     }
   }
 
-  saveCheckpoints() {
+  saveCheckpoints(shouldSync = true) {
     try {
       localStorage.setItem(STORAGE_KEY_CHECKPOINTS, JSON.stringify(this.checkpoints));
       this.notify();
-      this.scheduleCloudSync();
+      if (shouldSync) this.scheduleCloudSync();
     } catch (e) {
       console.error("Failed to save AI checkpoints:", e);
     }
@@ -607,21 +717,21 @@ class StorageService {
   // ==========================================
   // DSA TRACK METHODS
   // ==========================================
-  saveDsaProblems() {
+  saveDsaProblems(shouldSync = true) {
     try {
       localStorage.setItem(STORAGE_KEY_DSA_PROBLEMS, JSON.stringify(this.dsaProblems));
       this.notify();
-      this.scheduleCloudSync();
+      if (shouldSync) this.scheduleCloudSync();
     } catch (e) {
       console.error("Failed to save DSA problems:", e);
     }
   }
 
-  saveDsaAlreadySolved() {
+  saveDsaAlreadySolved(shouldSync = true) {
     try {
       localStorage.setItem(STORAGE_KEY_DSA_ALREADY_SOLVED, JSON.stringify(this.dsaAlreadySolved));
       this.notify();
-      this.scheduleCloudSync();
+      if (shouldSync) this.scheduleCloudSync();
     } catch (e) {
       console.error("Failed to save DSA already solved:", e);
     }
@@ -774,11 +884,9 @@ class StorageService {
   }
 
   getDsaTodayProblems(count = 3) {
-    // 1. First prioritize IN_PROGRESS or REVISE problems
     const active = this.dsaProblems.filter(p => p.status === 'IN_PROGRESS' || p.status === 'REVISE');
     if (active.length >= count) return active.slice(0, count);
 
-    // 2. Fill remaining from NOT_STARTED
     const notStarted = this.dsaProblems.filter(p => p.status === 'NOT_STARTED');
     return [...active, ...notStarted.slice(0, count - active.length)];
   }

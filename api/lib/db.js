@@ -1,17 +1,71 @@
-// api/lib/db.js - Universal Database Adapter for Vercel Serverless Functions
-// Supports: PostgreSQL (Vercel Postgres/Neon/Supabase), MongoDB Atlas, Upstash Redis/Vercel KV, and Graceful Fallback
+// api/lib/db.js - Universal Multi-Cloud Database Adapter for Vercel Serverless Functions
+// Supports: Vercel KV (Upstash Redis), PostgreSQL (Vercel Postgres/Neon/Supabase), MongoDB Atlas, and Supabase
 
 let memoryStore = {
   user: "JeevanPranav",
   updatedAt: new Date().toISOString(),
-  aiState: {},
-  dsaState: {},
+  days: [],
+  dsaProblems: [],
+  dsaAlreadySolved: [],
   doubts: [],
   projects: [],
-  settings: {}
+  checkpoints: [],
+  settings: {},
+  sessions: []
 };
 
-// --- POSTGRES CLIENT HELPER ---
+// ==========================================
+// 1. VERCEL KV / UPSTASH REDIS (NATIVE HTTP FETCH - 0 DEPENDENCIES)
+// ==========================================
+function getKvConfig() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) return { url, token };
+  return null;
+}
+
+async function kvGet(key) {
+  const cfg = getKvConfig();
+  if (!cfg) return null;
+  try {
+    const res = await fetch(`${cfg.url}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${cfg.token}` }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.result) {
+        return typeof json.result === 'string' ? JSON.parse(json.result) : json.result;
+      }
+    }
+  } catch (e) {
+    console.error("KV GET error:", e.message);
+  }
+  return null;
+}
+
+async function kvSet(key, value) {
+  const cfg = getKvConfig();
+  if (!cfg) return false;
+  try {
+    const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
+    const res = await fetch(`${cfg.url}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payloadStr)
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("KV SET error:", e.message);
+    return false;
+  }
+}
+
+// ==========================================
+// 2. POSTGRESQL / VERCEL POSTGRES / NEON
+// ==========================================
 let pgPool = null;
 function getPgPool() {
   const connString = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
@@ -34,72 +88,6 @@ function getPgPool() {
   return pgPool;
 }
 
-// --- SUPABASE CLIENT HELPER ---
-let supabaseClient = null;
-function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  if (!supabaseClient) {
-    try {
-      const { createClient } = require('@supabase/supabase-js');
-      supabaseClient = createClient(url, key);
-    } catch (e) {
-      console.warn("supabase client not initialized:", e.message);
-      return null;
-    }
-  }
-  return supabaseClient;
-}
-
-// --- UPSTASH REDIS / VERCEL KV HELPER ---
-let redisClient = null;
-function getRedisClient() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  if (!redisClient) {
-    try {
-      const { Redis } = require('@upstash/redis');
-      redisClient = new Redis({ url, token });
-    } catch (e) {
-      console.warn("upstash redis not initialized:", e.message);
-      return null;
-    }
-  }
-  return redisClient;
-}
-
-// --- MONGODB HELPER ---
-let mongoClient = null;
-let mongoDb = null;
-async function getMongoDb() {
-  const uri = process.env.MONGODB_URI || process.env.MONGO_URL;
-  if (!uri) return null;
-  if (!mongoDb) {
-    try {
-      const { MongoClient } = require('mongodb');
-      mongoClient = new MongoClient(uri);
-      await mongoClient.connect();
-      mongoDb = mongoClient.db(process.env.MONGODB_DB || 'personal_tracker');
-    } catch (e) {
-      console.warn("mongodb not connected:", e.message);
-      return null;
-    }
-  }
-  return mongoDb;
-}
-
-// --- DETECT ACTIVE ADAPTER ---
-function getActiveAdapterType() {
-  if (getPgPool()) return 'postgres';
-  if (getSupabaseClient()) return 'supabase';
-  if (getRedisClient()) return 'upstash_kv';
-  if (process.env.MONGODB_URI) return 'mongodb';
-  return 'memory_fallback';
-}
-
-// --- INIT SCHEMA IF POSTGRES ---
 let schemaInitialized = false;
 async function ensurePgSchema(pool) {
   if (schemaInitialized || !pool) return;
@@ -125,13 +113,87 @@ async function ensurePgSchema(pool) {
 }
 
 // ==========================================
-// UNIFIED CRUD OPERATIONS
+// 3. SUPABASE CLIENT
 // ==========================================
+let supabaseClient = null;
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  if (!supabaseClient) {
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      supabaseClient = createClient(url, key);
+    } catch (e) {
+      console.warn("supabase client not initialized:", e.message);
+      return null;
+    }
+  }
+  return supabaseClient;
+}
 
+// ==========================================
+// 4. MONGODB ATLAS
+// ==========================================
+let mongoClient = null;
+let mongoDb = null;
+async function getMongoDb() {
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URL;
+  if (!uri) return null;
+  if (!mongoDb) {
+    try {
+      const { MongoClient } = require('mongodb');
+      mongoClient = new MongoClient(uri);
+      await mongoClient.connect();
+      mongoDb = mongoClient.db(process.env.MONGODB_DB || 'personal_tracker');
+    } catch (e) {
+      console.warn("mongodb not connected:", e.message);
+      return null;
+    }
+  }
+  return mongoDb;
+}
+
+// ==========================================
+// DETECT ACTIVE ADAPTER
+// ==========================================
+function getActiveAdapterType() {
+  if (getKvConfig()) return 'vercel_kv';
+  if (getPgPool()) return 'postgres';
+  if (getSupabaseClient()) return 'supabase';
+  if (process.env.MONGODB_URI) return 'mongodb';
+  return 'memory_fallback';
+}
+
+// ==========================================
+// UNIFIED CRUD GET & SAVE
+// ==========================================
 async function getFullUserData(username = 'JeevanPranav') {
   const adapter = getActiveAdapterType();
 
-  // 1. PostgreSQL (Vercel Postgres / Neon / Supabase direct SQL)
+  // 1. Vercel KV / Upstash Redis (Fastest & Simplest for Vercel)
+  if (adapter === 'vercel_kv') {
+    const data = await kvGet(`user_store:${username}`);
+    if (data) {
+      return {
+        success: true,
+        adapter: 'vercel_kv',
+        data: {
+          days: data.days || [],
+          dsaProblems: data.dsaProblems || [],
+          dsaAlreadySolved: data.dsaAlreadySolved || [],
+          doubts: data.doubts || [],
+          projects: data.projects || [],
+          checkpoints: data.checkpoints || [],
+          settings: data.settings || {},
+          sessions: data.sessions || [],
+          updatedAt: data.updatedAt || new Date().toISOString()
+        }
+      };
+    }
+  }
+
+  // 2. PostgreSQL (Vercel Postgres / Neon / Supabase direct SQL)
   if (adapter === 'postgres') {
     const pool = getPgPool();
     await ensurePgSchema(pool);
@@ -160,7 +222,7 @@ async function getFullUserData(username = 'JeevanPranav') {
     }
   }
 
-  // 2. Supabase Client
+  // 3. Supabase Client
   if (adapter === 'supabase') {
     const supabase = getSupabaseClient();
     try {
@@ -188,19 +250,6 @@ async function getFullUserData(username = 'JeevanPranav') {
       }
     } catch (e) {
       console.error("Supabase get error:", e.message);
-    }
-  }
-
-  // 3. Upstash Redis / Vercel KV
-  if (adapter === 'upstash_kv') {
-    const redis = getRedisClient();
-    try {
-      const data = await redis.get(`user_store:${username}`);
-      if (data) {
-        return { success: true, adapter: 'upstash_kv', data };
-      }
-    } catch (e) {
-      console.error("Upstash Redis get error:", e.message);
     }
   }
 
@@ -246,7 +295,6 @@ async function saveFullUserData(username = 'JeevanPranav', payload = {}) {
   const adapter = getActiveAdapterType();
   const now = new Date().toISOString();
 
-  // Clean data structure
   const cleanData = {
     days: Array.isArray(payload.days) ? payload.days : [],
     dsaProblems: Array.isArray(payload.dsaProblems) ? payload.dsaProblems : [],
@@ -259,7 +307,15 @@ async function saveFullUserData(username = 'JeevanPranav', payload = {}) {
     updatedAt: now
   };
 
-  // 1. PostgreSQL
+  // 1. Vercel KV / Upstash Redis
+  if (adapter === 'vercel_kv') {
+    const success = await kvSet(`user_store:${username}`, cleanData);
+    if (success) {
+      return { success: true, adapter: 'vercel_kv', updatedAt: now };
+    }
+  }
+
+  // 2. PostgreSQL
   if (adapter === 'postgres') {
     const pool = getPgPool();
     await ensurePgSchema(pool);
@@ -296,7 +352,7 @@ async function saveFullUserData(username = 'JeevanPranav', payload = {}) {
     }
   }
 
-  // 2. Supabase Client
+  // 3. Supabase
   if (adapter === 'supabase') {
     const supabase = getSupabaseClient();
     try {
@@ -322,18 +378,7 @@ async function saveFullUserData(username = 'JeevanPranav', payload = {}) {
     }
   }
 
-  // 3. Upstash Redis
-  if (adapter === 'upstash_kv') {
-    const redis = getRedisClient();
-    try {
-      await redis.set(`user_store:${username}`, cleanData);
-      return { success: true, adapter: 'upstash_kv', updatedAt: now };
-    } catch (e) {
-      console.error("Upstash Redis save error:", e.message);
-    }
-  }
-
-  // 4. MongoDB Atlas
+  // 4. MongoDB
   if (adapter === 'mongodb') {
     try {
       const db = await getMongoDb();
