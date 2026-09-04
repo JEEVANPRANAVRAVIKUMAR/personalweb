@@ -1,6 +1,6 @@
 # JEEVANPRANAV — TECHNICAL DEVELOPMENT TRACKER
 
-A developer-first, dark-themed interactive operating system and learning dashboard designed for technical mastery across two dedicated tracks: **AI Engineer (365-Day Engine)** and **Data Structures & Algorithms (250 Practice Set & Revision System)**.
+A developer-first, dark-themed interactive operating system and learning dashboard designed for technical mastery across two dedicated tracks: **AI Engineer (365-Day Engine)** and **Data Structures & Algorithms (250 Practice Set & Revision System)** with a Vercel Serverless Backend & Cloud Database Persistence layer.
 
 ---
 
@@ -50,6 +50,44 @@ Fixed credentials configured for the personal workspace:
 
 ---
 
+## ☁️ Vercel Deployment & Cloud Database Setup
+
+This repository is ready to deploy directly to **Vercel** with serverless functions and cross-device cloud persistence.
+
+### Step 1: Deploy to Vercel
+1. Push your repository to GitHub: `https://github.com/JEEVANPRANAVRAVIKUMAR/personalweb.git`
+2. Open [Vercel Dashboard](https://vercel.com) and click **"Add New" $\to$ "Project"**.
+3. Import `JEEVANPRANAVRAVIKUMAR/personalweb`.
+4. Click **Deploy**.
+
+The application will deploy immediately with zero configuration and run in **Optimistic Local Storage + Auto-Sync Fallback** mode!
+
+---
+
+### Step 2: Connect a Cloud Database (Optional for Cross-Device Sync)
+
+You can connect any of the following standard cloud databases by adding environment variables in your **Vercel Project Settings $\to$ Environment Variables**:
+
+#### 1. PostgreSQL (Vercel Postgres, Supabase, Neon)
+- Add:
+  - `POSTGRES_URL` or `DATABASE_URL` = `postgres://user:password@host:port/database`
+- *Or for Supabase Client:*
+  - `SUPABASE_URL` = `https://your-project.supabase.co`
+  - `SUPABASE_ANON_KEY` = `your-supabase-anon-key`
+
+#### 2. MongoDB Atlas
+- Add:
+  - `MONGODB_URI` = `mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority`
+
+#### 3. Upstash Redis / Vercel KV
+- Add:
+  - `KV_REST_API_URL` = `https://your-upstash-redis.upstash.io`
+  - `KV_REST_API_TOKEN` = `your-upstash-token`
+
+*Once connected, redeploy on Vercel and your app will show `🟢 CLOUD_DATABASE (Connected)` in the header!*
+
+---
+
 ## 🚀 How to Run Locally
 
 ### Option 1: Direct Browser Launch
@@ -72,8 +110,18 @@ Navigate to `http://localhost:8000`.
 ```
 personal-web/
 ├── index.html                  # Main application entry point
+├── vercel.json                 # Vercel deployment & routing configuration
+├── package.json                # Serverless dependencies & scripts
 ├── README.md                   # Project documentation
 ├── .gitignore                  # Git ignore rules
+├── api/                        # Vercel Serverless Functions
+│   ├── auth.js                 # JWT Authentication & Session verification
+│   ├── sync.js                 # Bidirectional cloud state sync endpoint
+│   ├── health.js               # Database connection health check
+│   ├── ai.js                   # AI Engineer roadmap & doubts API
+│   ├── dsa.js                  # DSA 250 problems & targets API
+│   └── lib/
+│       └── db.js               # Universal Database Adapter (Postgres/Supabase/Mongo/KV)
 ├── src/
 │   ├── components/
 │   │   └── App.jsx             # React application (Login, Track Chooser, AI & DSA Views)
@@ -84,7 +132,7 @@ personal-web/
 │   │   └── projectsDataset.js  # 7 Production projects & 9 checkpoints
 │   ├── services/
 │   │   ├── authService.js      # Session management & credential verification
-│   │   ├── storageService.js   # Unified reactive local storage service
+│   │   ├── storageService.js   # Unified reactive local storage & cloud sync service
 │   │   └── excelService.js     # SheetJS Excel parsing & export utilities
 │   └── styles/
 │       └── main.css            # Custom styling, dark mode, and animations

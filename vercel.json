@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "name": "personal-technical-development-tracker",
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "src/**/*",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.xlsx",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Authorization"
+      }
+    },
+    {
+      "src": "/src/(.*)",
+      "dest": "/src/$1"
+    },
+    {
+      "src": "/(.*\\.(?:css|js|jsx|json|png|jpg|jpeg|svg|ico|xlsx))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

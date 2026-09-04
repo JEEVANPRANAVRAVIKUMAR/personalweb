@@ -2610,7 +2610,151 @@ function DSAPracticeView({ problems, onSelectProblem, searchQuery, setSearchQuer
 }
 
 // ==========================================
-// 10. MAIN ROOT APP CONTROLLER
+// 10. DATABASE & CLOUD SYNC MODAL
+// ==========================================
+function DatabaseSyncModal({ isOpen, onClose }) {
+  const [syncInfo, setSyncInfo] = useState(() => (getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' }));
+  const [healthData, setHealthData] = useState(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const checkHealth = async () => {
+    setIsTesting(true);
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const data = await res.json();
+        setHealthData(data);
+      } else {
+        setHealthData({ status: 'offline', database: { adapter: 'local_fallback', description: 'Local static mode.' } });
+      }
+    } catch (e) {
+      setHealthData({ status: 'offline', database: { adapter: 'local_fallback', description: 'Offline / local server mode.' } });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      setSyncInfo(getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' });
+      checkHealth();
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handlePushSync = async () => {
+    setIsSyncing(true);
+    if (getStorage().pushCloudSync) {
+      await getStorage().pushCloudSync();
+      setSyncInfo(getStorage().getSyncInfo());
+      notify("Pushed latest progress to Cloud Database!", "success");
+    }
+    setIsSyncing(false);
+  };
+
+  const handlePullSync = async () => {
+    setIsSyncing(true);
+    if (getStorage().pullCloudSync) {
+      await getStorage().pullCloudSync();
+      setSyncInfo(getStorage().getSyncInfo());
+      notify("Pulled latest state from Cloud Database!", "success");
+    }
+    setIsSyncing(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#121824] border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+              <Icon name="database" size={18} />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-white">Database & Cloud Sync</h3>
+              <p className="text-[11px] text-slate-400">Vercel Serverless Backend & Persistent Storage</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+
+        {/* CURRENT STATUS CARD */}
+        <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 font-medium">Adapter Status</span>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
+              healthData?.database?.connected
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+            }`}>
+              {healthData?.database?.adapter?.toUpperCase() || syncInfo.adapter?.toUpperCase() || 'LOCAL CACHE'}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed font-mono">
+            {healthData?.database?.description || 'Synchronized with local storage and background cloud endpoints.'}
+          </p>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-900 font-mono">
+            <span>Last Synced: {syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleTimeString() : 'Just now'}</span>
+            <span>Latency: {healthData?.latencyMs !== undefined ? `${healthData.latencyMs}ms` : '0ms'}</span>
+          </div>
+        </div>
+
+        {/* SYNC ACTIONS */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={handlePushSync}
+            disabled={isSyncing}
+            className="p-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50"
+          >
+            <Icon name="upload-cloud" size={15} />
+            <span>{isSyncing ? "Syncing..." : "Push to Cloud"}</span>
+          </button>
+
+          <button
+            onClick={handlePullSync}
+            disabled={isSyncing}
+            className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition disabled:opacity-50"
+          >
+            <Icon name="download-cloud" size={15} />
+            <span>Pull from Cloud</span>
+          </button>
+        </div>
+
+        {/* VERCEL DEPLOYMENT CHEATSHEET */}
+        <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5 font-mono">
+          <div className="text-slate-400 font-bold text-[11px] uppercase flex items-center gap-1">
+            <Icon name="server" size={13} className="text-blue-400" />
+            <span>Vercel Database Environment Variables</span>
+          </div>
+          <p className="text-[11px] text-slate-400">Add any of the following to your Vercel Project Settings for cloud storage:</p>
+          <div className="space-y-1 text-[10px] text-slate-300">
+            <div>• <strong className="text-blue-400">PostgreSQL / Supabase / Neon:</strong> <code>POSTGRES_URL</code> or <code>DATABASE_URL</code></div>
+            <div>• <strong className="text-emerald-400">MongoDB Atlas:</strong> <code>MONGODB_URI</code></div>
+            <div>• <strong className="text-amber-400">Upstash Redis / Vercel KV:</strong> <code>KV_REST_API_URL</code> & <code>KV_REST_API_TOKEN</code></div>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 11. MAIN ROOT APP CONTROLLER
 // ==========================================
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => getAuth().isAuthenticated());
@@ -2620,6 +2764,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDsaProblem, setSelectedDsaProblem] = useState(null);
   const [selectedAiDay, setSelectedAiDay] = useState(null);
+  const [showDbModal, setShowDbModal] = useState(false);
 
   const [version, setVersion] = useState(0);
 
@@ -2643,6 +2788,9 @@ export default function App() {
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
     setSelectedTrack(getAuth().getSelectedTrack() || null);
+    if (getStorage().pullCloudSync) {
+      getStorage().pullCloudSync();
+    }
   };
 
   const handleLogout = () => {
@@ -2672,6 +2820,7 @@ export default function App() {
   const projects = getStorage().projects.length > 0 ? getStorage().projects : getProjects();
   const checkpoints = getStorage().checkpoints;
   const todayDay = getStorage().getTodayDay();
+  const syncInfo = getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#070a0f] text-slate-100 selection:bg-emerald-600 selection:text-white">
@@ -2759,6 +2908,22 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {/* Database & Cloud Sync Badge */}
+            <button
+              onClick={() => setShowDbModal(true)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border ${
+                syncInfo.state === 'synced'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                  : syncInfo.state === 'syncing'
+                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 animate-pulse'
+                  : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-700'
+              }`}
+              title="Database & Cloud Sync Status"
+            >
+              <span className={`w-2 h-2 rounded-full ${syncInfo.state === 'synced' ? 'bg-emerald-400' : syncInfo.state === 'syncing' ? 'bg-blue-400' : 'bg-slate-400'}`}></span>
+              <span className="hidden sm:inline font-mono text-[11px]">{syncInfo.state === 'synced' ? 'Cloud Synced' : syncInfo.state === 'syncing' ? 'Syncing...' : 'Local Cache'}</span>
+            </button>
+
             <button
               onClick={() => setSelectedTrack(null)}
               className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700/50"
@@ -2776,6 +2941,9 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* DATABASE MODAL */}
+      <DatabaseSyncModal isOpen={showDbModal} onClose={() => setShowDbModal(false)} />
 
       {/* MAIN VIEW CONTAINER */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
