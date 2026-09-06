@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npx serve .",
     "start": "npx serve .",
+    "seed": "node scripts/seed_supabase.js",
     "test:api": "node api/health.js"
   },
   "keywords": [
@@ -25,6 +26,7 @@
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.14.0",
-    "pg": "^8.13.3"
+    "pg": "^8.13.3",
+    "xlsx": "^0.18.5"
   }
 }

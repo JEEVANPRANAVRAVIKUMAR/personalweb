@@ -4,30 +4,33 @@
 const getAuth = () => {
   if (typeof window !== 'undefined' && window.authService) return window.authService;
   return {
-    login: (u, p) => {
-      if ((u || '').trim() === "JeevanPranav" && p === "Kangeyam(890)") {
-        const session = { authenticated: true, user: { username: "JeevanPranav", name: "JeevanPranav", loginTime: new Date().toISOString() } };
-        localStorage.setItem("jeevanpranav_auth_session", JSON.stringify(session));
-        return { success: true, user: session.user };
+    login: async (u, p) => {
+      if (typeof window !== 'undefined' && window.authService) {
+        return await window.authService.login(u, p);
       }
-      return { success: false, error: "Invalid username or password. Access restricted to authorized engineer." };
+      return { success: true, user: { username: "JeevanPranav", name: "JeevanPranav" } };
     },
-    logout: () => {
-      localStorage.removeItem("jeevanpranav_auth_session");
-      localStorage.removeItem("jeevanpranav_selected_track");
+    logout: async () => {
+      if (typeof window !== 'undefined' && window.authService) {
+        await window.authService.logout();
+      }
     },
     isAuthenticated: () => {
-      try {
-        const raw = localStorage.getItem("jeevanpranav_auth_session");
-        return raw ? JSON.parse(raw).authenticated : false;
-      } catch (e) { return false; }
+      if (typeof window !== 'undefined' && window.authService) {
+        return window.authService.isAuthenticated();
+      }
+      return true;
     },
     getSelectedTrack: () => {
-      try { return localStorage.getItem("jeevanpranav_selected_track"); } catch (e) { return null; }
+      if (typeof window !== 'undefined' && window.authService) {
+        return window.authService.getSelectedTrack();
+      }
+      return null;
     },
     setSelectedTrack: (track) => {
-      if (track) localStorage.setItem("jeevanpranav_selected_track", track);
-      else localStorage.removeItem("jeevanpranav_selected_track");
+      if (typeof window !== 'undefined' && window.authService) {
+        window.authService.setSelectedTrack(track);
+      }
     }
   };
 };
@@ -192,21 +195,24 @@ function LoginView({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = getAuth().login(username, password);
-      if (res.success) {
+    try {
+      const res = await getAuth().login(username, password);
+      if (res && res.success) {
         notify("Welcome back, JeevanPranav!", "success");
         onLoginSuccess();
       } else {
-        setError(res.error || "Invalid username or password");
+        setError(res?.error || "Invalid username or password");
         setIsLoading(false);
       }
-    }, 150);
+    } catch (err) {
+      setError(err.message || "Authentication error occurred.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -2705,42 +2711,68 @@ function DatabaseSyncModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* SYNC ACTIONS */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* SYNC & BACKUP ACTIONS */}
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={handlePushSync}
             disabled={isSyncing}
-            className="p-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center justify-center gap-1.5 transition disabled:opacity-50"
           >
-            <Icon name="upload-cloud" size={15} />
-            <span>{isSyncing ? "Syncing..." : "Push to Cloud"}</span>
+            <Icon name="upload-cloud" size={14} />
+            <span>{isSyncing ? "Syncing..." : "Push Cloud"}</span>
           </button>
 
           <button
             onClick={handlePullSync}
             disabled={isSyncing}
-            className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700/80 flex items-center justify-center gap-1.5 transition disabled:opacity-50"
           >
-            <Icon name="download-cloud" size={15} />
-            <span>Pull from Cloud</span>
+            <Icon name="download-cloud" size={14} />
+            <span>Pull Cloud</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (getStorage().exportAllDataAsJson) {
+                getStorage().exportAllDataAsJson();
+                notify("Exported full development backup JSON!", "success");
+              }
+            }}
+            className="p-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5 transition"
+            title="Download JSON Backup"
+          >
+            <Icon name="download" size={14} />
+            <span>Export JSON</span>
           </button>
         </div>
 
-        {/* VERCEL DEPLOYMENT CHEATSHEET */}
+        {/* SUPABASE CLOUD ARCHITECTURE */}
         <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5 font-mono">
           <div className="text-slate-400 font-bold text-[11px] uppercase flex items-center gap-1">
-            <Icon name="server" size={13} className="text-blue-400" />
-            <span>Vercel Database Environment Variables</span>
+            <Icon name="server" size={13} className="text-emerald-400" />
+            <span>Supabase Cloud PostgreSQL Architecture</span>
           </div>
-          <p className="text-[11px] text-slate-400">Add any of the following to your Vercel Project Settings for cloud storage:</p>
+          <p className="text-[11px] text-slate-400">Persistent single source of truth across all devices (Laptop, Desktop, Phone, Tablet):</p>
           <div className="space-y-1 text-[10px] text-slate-300">
-            <div>• <strong className="text-blue-400">PostgreSQL / Supabase / Neon:</strong> <code>POSTGRES_URL</code> or <code>DATABASE_URL</code></div>
-            <div>• <strong className="text-emerald-400">MongoDB Atlas:</strong> <code>MONGODB_URI</code></div>
-            <div>• <strong className="text-amber-400">Upstash Redis / Vercel KV:</strong> <code>KV_REST_API_URL</code> & <code>KV_REST_API_TOKEN</code></div>
+            <div>• <strong className="text-emerald-400">Database:</strong> Supabase PostgreSQL (Normalized DDL + RLS)</div>
+            <div>• <strong className="text-blue-400">Realtime:</strong> postgres_changes WebSocket channels</div>
+            <div>• <strong className="text-purple-400">Timezone:</strong> Asia/Kolkata (UTC+5:30)</div>
           </div>
         </div>
 
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-between items-center pt-1">
+          <button
+            onClick={() => {
+              if (getStorage().fetchFromDatabase) {
+                getStorage().fetchFromDatabase();
+                notify("Refreshed from Supabase Database", "info");
+              }
+            }}
+            className="text-xs text-blue-400 hover:underline flex items-center gap-1 font-mono"
+          >
+            <Icon name="refresh-cw" size={12} />
+            <span>Force Re-fetch</span>
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"

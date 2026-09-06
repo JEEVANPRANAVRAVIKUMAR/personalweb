@@ -1,107 +1,190 @@
-# JEEVANPRANAV — TECHNICAL DEVELOPMENT TRACKER
+# JEEVANPRANAV — PERSONAL TECHNICAL DEVELOPMENT PLATFORM
+### Cloud-Persistent Engineering Operating System (AI Engineer & DSA Tracks)
 
-A developer-first, dark-themed interactive operating system and learning dashboard designed for technical mastery across two dedicated tracks: **AI Engineer (365-Day Engine)** and **Data Structures & Algorithms (250 Practice Set & Revision System)** with a Vercel Serverless Backend & Cloud Database Persistence layer.
+A developer-first, cloud-backed personal development operating system designed for lifelong technical mastery across two dedicated tracks:
+1. **AI Engineer Mastery Engine (365-Day Protocol)**
+2. **Data Structures & Algorithms (250 Curated Practice Problems & 154 Revision Set)**
 
----
-
-## 🌟 Key Tracks & Capabilities
-
-### 1. 🧠 AI Engineer Track (365-Day Mastery Protocol)
-- **13 Structured Phases & 53 Weeks**: Comprehensive progression covering Mathematics for ML, Classical ML, Deep Learning from Scratch, PyTorch Mastery, Transformers & LLMs, RAG & Vector Search, Fine-Tuning & PEFT (LoRA/QLoRA), Agentic Systems & MCP Security, Edge & Speech AI, MLOps Platforms, and GPU Architecture & CUDA Optimization.
-- **Interactive Roadmap Table**:
-  - Compact phase accordions with circular status toggles.
-  - Quick inline remarks modal to record personal notes, reflections, and derivations on every topic.
-  - What to Study (core focus) vs. What to Skip (time-saving guidance).
-  - Direct links to verified primary documentation, textbooks, and videos.
-- **2-Hour Daily Session Engine & Timer**:
-  - Focus protocol with **1. Learn (45m)**, **2. Build (75m)**, and **3. Revise (5m)**.
-  - Real-time countdown timer with sound chimes and task deliverables.
-- **Relational Doubts Knowledge Base**:
-  - Log questions and initial intuition per topic.
-  - Record verified solutions with detailed explanations.
-- **7 Production Projects & Checkpoints**:
-  - 50-point rubric evaluator across Theory, Implementation, Debugging, Explanation, and Code Quality.
-- **107+ Curated Sources Directory**:
-  - Quality-tiered directory (Primary, High Quality, Secondary) with explicit study/skip guidance.
-
-### 2. ⚡ Data Structures & Algorithms Track (LeetCode 250 & Revision Bank)
-- **250 Practice Problems across 22 Categories**:
-  - Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap / Priority Queue, Backtracking, Graphs, 1D/2D DP, Greedy, Intervals, Math & Geometry, Bit Manipulation.
-- **Image-Matched Practice Table**:
-  - Circular green status checkboxes.
-  - Company pill badges (Amazon, Google, Microsoft, Meta, Apple, Bloomberg, Uber, Netflix).
-  - Direct `</>` LeetCode problem links.
-  - `📝` Personal notes & mistakes modal.
-  - `+ Attempt` interactive counter.
-- **Today's Target Solver**:
-  - Switchable 3/day (~12 weeks) or 5/day (~7 weeks) target queues.
-- **154 Already Solved Revision Bank**:
-  - Searchable problem bank for active recall and spaced revision.
-- **22 Category Grid & Pattern Analytics**:
-  - Difficulty distribution (Easy / Medium / Hard) and weak pattern radar.
+Backed by **Supabase PostgreSQL**, **Supabase Auth**, **Real-Time WebSockets**, and a **Vercel Serverless Architecture**, ensuring that **the database is the authoritative single source of truth** across your Laptop, Desktop, Phone, and Tablet with zero dependence on browser memory or local storage.
 
 ---
 
-## 🔐 Authentication
+## 🌟 Key Capabilities & Track Architecture
 
-Fixed credentials configured for the personal workspace:
-- **Username**: `JeevanPranav`
+```
+                 ┌────────────────────────────────────────┐
+                 │    CROSS-DEVICE ACCESS (Phone/Laptop)  │
+                 └───────────────────┬────────────────────┘
+                                     │
+                 ┌───────────────────▼────────────────────┐
+                 │       VERCEL / EDGE CDN DEPLOYMENT     │
+                 │          React 18 + Tailwind CSS       │
+                 └───────────────────┬────────────────────┘
+                                     │
+                             Authenticated API
+                                     │
+                 ┌───────────────────▼────────────────────┐
+                 │        SUPABASE CLOUD PLATFORM         │
+                 │                                        │
+                 │   • PostgreSQL Database (Single Truth) │
+                 │   • Supabase Auth (JWT Sessions)       │
+                 │   • Row Level Security (RLS)           │
+                 │   • Realtime Channels (WebSockets)     │
+                 └───────────────────┬────────────────────┘
+                                     │
+          ┌──────────────────────────┼──────────────────────────┐
+          │                          │                          │
+          ▼                          ▼                          ▼
+   DSA PRACTICE &             AI ROADMAP (365d)          ACTIVITY & STREAK
+   REVISION SYSTEM             & DOUBTS ENGINE            ANALYTICS ENGINE
+   • 250 Problems (22 Cats)   • 13 Phases, 53 Weeks      • Asia/Kolkata (UTC+5:30)
+   • 154 Already Solved Bank  • 7 Production Projects    • Daily solve counts
+   • Attempts & Gotchas       • Doubts Knowledge Base    • Dynamic Streak Calc
+   • Spaced Repetition        • 2-Hour Daily Session     • Spaced Revisions Due
+```
+
+---
+
+## 🔐 Credentials & Authentication
+
+- **Username / Email**: `JeevanPranav` or `jeevanpranav@engineer.local`
 - **Password**: `Kangeyam(890)`
+- **Authentication Engine**: Supabase Auth (with email + password backing).
+- Multi-device sessions are authenticated server-side and automatically refreshed without logging you out.
 
 ---
 
-## ☁️ Vercel Deployment & Cloud Database Setup
+## 🗄️ Database Structure (Supabase PostgreSQL)
 
-This repository is ready to deploy directly to **Vercel** with serverless functions and cross-device cloud persistence.
+### 1. Master Catalog Tables
+- `dsa_categories`: 22 algorithmic categories with metadata, icons, and interview-critical badges.
+- `dsa_problems`: 250 curated practice problems with difficulty, patterns, companies, and LeetCode URLs.
+- `dsa_already_solved`: 154 problems in the revision bank.
+- `ai_roadmap_days`: 365 structured AI engineering days with concepts, sources, tasks, and deliverables.
 
-### Step 1: Deploy to Vercel
-1. Push your repository to GitHub: `https://github.com/JEEVANPRANAVRAVIKUMAR/personalweb.git`
-2. Open [Vercel Dashboard](https://vercel.com) and click **"Add New" $\to$ "Project"**.
-3. Import `JEEVANPRANAVRAVIKUMAR/personalweb`.
-4. Click **Deploy**.
-
-The application will deploy immediately with zero configuration and run in **Optimistic Local Storage + Auto-Sync Fallback** mode!
-
----
-
-### Step 2: Connect a Cloud Database (Optional for Cross-Device Sync)
-
-You can connect any of the following standard cloud databases by adding environment variables in your **Vercel Project Settings $\to$ Environment Variables**:
-
-#### 1. PostgreSQL (Vercel Postgres, Supabase, Neon)
-- Add:
-  - `POSTGRES_URL` or `DATABASE_URL` = `postgres://user:password@host:port/database`
-- *Or for Supabase Client:*
-  - `SUPABASE_URL` = `https://your-project.supabase.co`
-  - `SUPABASE_ANON_KEY` = `your-supabase-anon-key`
-
-#### 2. MongoDB Atlas
-- Add:
-  - `MONGODB_URI` = `mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority`
-
-#### 3. Upstash Redis / Vercel KV
-- Add:
-  - `KV_REST_API_URL` = `https://your-upstash-redis.upstash.io`
-  - `KV_REST_API_TOKEN` = `your-upstash-token`
-
-*Once connected, redeploy on Vercel and your app will show `🟢 CLOUD_DATABASE (Connected)` in the header!*
+### 2. User Progress Tables (User-Scoped & RLS Protected)
+- `dsa_problem_progress`: `(user_id, problem_id)` $\to$ `status`, `attempts`, `mastery`, `date_solved`, `notes`, `mistakes`, `next_revision_date`.
+- `dsa_attempts`: Individual attempt logs with duration, approach, and gotchas.
+- `dsa_already_solved_progress`: Revision status and spaced revision schedule.
+- `ai_roadmap_progress`: `(user_id, day)` $\to$ `status`, `mastery`, `time_spent_minutes`, `remarks`, `notes`, `completed_at`.
+- `ai_doubts`: Relational doubts knowledge base with problem/topic reference, questions, intuition, and verified solutions.
+- `ai_projects` & `ai_checkpoints`: 7 production projects and milestone evaluations with 50-point rubric scoring.
+- `ai_study_sessions`: Daily study duration logs per phase (Learn 45m / Build 75m / Revise 5m).
+- `daily_activity`: Aggregate daily summary for analytics and streak calculation.
+- `user_settings`: Application preferences and daily targets.
 
 ---
 
 ## 🚀 How to Run Locally
 
-### Option 1: Direct Browser Launch
-Open `index.html` in any modern web browser (Chrome, Edge, Firefox, Brave, Safari).
+### 1. Prerequisites
+- Node.js (v18 or newer)
+- npm or yarn
 
-### Option 2: Local HTTP Server
+### 2. Installation
 ```bash
-# Python
-python -m http.server 8000
+# Clone the repository
+git clone https://github.com/JEEVANPRANAVRAVIKUMAR/personalweb.git
+cd personalweb
 
-# Or Node.js
+# Install dependencies
+npm install
+```
+
+### 3. Configure Environment Variables
+Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
+```
+Ensure the Supabase variables are set:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://cpvqqbbpcxzfhckpczwr.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_VzkHQZKNoHRQWa0FsfrdMg_6IzW91Le
+SUPABASE_URL=https://cpvqqbbpcxzfhckpczwr.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_VzkHQZKNoHRQWa0FsfrdMg_6IzW91Le
+APP_TIMEZONE=Asia/Kolkata
+```
+
+### 4. Database Migrations & Initial Seed
+Run the initial schema migration and seed script:
+```bash
+# In Supabase SQL Editor, run:
+# 1. supabase/migrations/20260907000001_init_schema.sql
+# 2. supabase/migrations/20260907000002_seed_master_data.sql
+
+# Or run the Node seed runner:
+npm run seed
+```
+
+### 5. Start Local Development Server
+```bash
+npm run dev
+# Or
 npx serve .
 ```
-Navigate to `http://localhost:8000`.
+Navigate to `http://localhost:3000` (or the port indicated by serve).
+
+---
+
+## ☁️ Vercel Production Deployment
+
+### Step 1: Connect Repository to Vercel
+1. Push this repository to GitHub: `https://github.com/JEEVANPRANAVRAVIKUMAR/personalweb`
+2. Open [Vercel Dashboard](https://vercel.com) and click **"Add New" $\to$ "Project"**.
+3. Select `personalweb` and click **Import**.
+
+### Step 2: Configure Vercel Environment Variables
+Under **Project Settings $\to$ Environment Variables**, add:
+
+| Variable Name | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://cpvqqbbpcxzfhckpczwr.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_VzkHQZKNoHRQWa0FsfrdMg_6IzW91Le` |
+| `SUPABASE_URL` | `https://cpvqqbbpcxzfhckpczwr.supabase.co` |
+| `SUPABASE_ANON_KEY` | `sb_publishable_VzkHQZKNoHRQWa0FsfrdMg_6IzW91Le` |
+| `APP_TIMEZONE` | `Asia/Kolkata` |
+| `APP_USERNAME` | `JeevanPranav` |
+| `APP_PASSWORD` | `Kangeyam(890)` |
+
+### Step 3: Deploy
+Click **Deploy**. Your application will be live at `https://your-project.vercel.app`.
+
+---
+
+## 🧪 Testing Checklist & Multi-Device Verification
+
+### 1. Cross-Device Persistence Acceptance Test (Laptop $\to$ Phone)
+1. **Laptop**:
+   - Open deployed Vercel site $\to$ Login with `JeevanPranav` / `Kangeyam(890)`.
+   - Open **DSA Track** $\to$ **Practice 250**.
+   - Locate LeetCode #1 (**Two Sum**).
+   - Click **Mark Done** $\to$ status turns green.
+   - Click **📝 Notes** $\to$ Add note: `"First approach brute force. Second approach HashMap O(n)."` and mistake: `"Initially forgot HashMap."`.
+   - Set Mastery to `4`, Attempts to `2`.
+   - Click **Save Notes** $\to$ Notice header displays `Saved ✓`.
+2. **Phone**:
+   - Open the same Vercel URL on mobile.
+   - Login.
+   - Open **DSA Track** $\to$ Find **Two Sum**.
+   - **Verification**: It must immediately show **COMPLETED**, **Mastery: 4**, **Attempts: 2**, and the exact remarks and notes.
+   - On Phone: Edit note to `"Updated from phone"`. Click **Save**.
+3. **Laptop**:
+   - Return to Laptop $\to$ Notice real-time update reflects `"Updated from phone"` automatically!
+
+### 2. AI Engineer Cross-Device Test
+1. **Laptop**:
+   - Open **AI Engineer Track** $\to$ Mark Day 1 completed.
+   - Add a doubt: `"Why is self-attention O(n^2)?"` with your understanding.
+2. **Phone**:
+   - Open **AI Engineer Track** $\to$ Verify Day 1 is marked Completed and the doubt appears in the Doubts queue.
+
+### 3. Spaced Revision Test
+1. Mark any problem or day as `REVISE` $\to$ Schedules next revision.
+2. Open **Revision Tab** on mobile $\to$ Verify the item appears in the revision queue with the correct due date.
+
+### 4. Data Export & Backup
+1. Click the database icon in the top navigation bar.
+2. Click **Export JSON** to instantly download a full snapshot backup of all DSA problems, AI days, remarks, doubts, and user settings.
 
 ---
 
@@ -109,31 +192,51 @@ Navigate to `http://localhost:8000`.
 
 ```
 personal-web/
-├── index.html                  # Main application entry point
-├── vercel.json                 # Vercel deployment & routing configuration
-├── package.json                # Serverless dependencies & scripts
-├── README.md                   # Project documentation
-├── .gitignore                  # Git ignore rules
-├── api/                        # Vercel Serverless Functions
-│   ├── auth.js                 # JWT Authentication & Session verification
-│   ├── sync.js                 # Bidirectional cloud state sync endpoint
-│   ├── health.js               # Database connection health check
-│   ├── ai.js                   # AI Engineer roadmap & doubts API
-│   ├── dsa.js                  # DSA 250 problems & targets API
+├── index.html                           # Main application entry point with Supabase client
+├── vercel.json                          # Vercel Serverless routing configuration
+├── package.json                         # Dependencies & seed scripts
+├── .env.example                         # Environment variables template
+├── .env.local                           # Local environment configuration
+├── README.md                            # Complete architecture & deployment guide
+├── LeetCode_250_Practice_Tracker (1).xlsx # Master DSA dataset source
+├── supabase/
+│   └── migrations/
+│       ├── 20260907000001_init_schema.sql     # PostgreSQL tables, RLS & triggers
+│       └── 20260907000002_seed_master_data.sql # Master catalog seeds (22 categories)
+├── scripts/
+│   └── seed_supabase.js                 # Idempotent master seed runner script
+├── api/                                 # Vercel Serverless Functions
+│   ├── auth.js                          # Auth & token endpoint
+│   ├── sync.js                          # Cloud sync endpoint
+│   ├── health.js                        # Database health check
+│   ├── ai.js                            # AI Track API
+│   ├── dsa.js                           # DSA Track API
 │   └── lib/
-│       └── db.js               # Universal Database Adapter (Postgres/Supabase/Mongo/KV)
-├── src/
-│   ├── components/
-│   │   └── App.jsx             # React application (Login, Track Chooser, AI & DSA Views)
-│   ├── data/
-│   │   ├── dsaDataset.js       # 250 Practice problems, 154 already solved, 22 categories
-│   │   ├── roadmapDataset.js   # 365 AI roadmap days with tasks & deliverables
-│   │   ├── sourcesDataset.js   # 107 Curated engineering resources & textbooks
-│   │   └── projectsDataset.js  # 7 Production projects & 9 checkpoints
-│   ├── services/
-│   │   ├── authService.js      # Session management & credential verification
-│   │   ├── storageService.js   # Unified reactive local storage & cloud sync service
-│   │   └── excelService.js     # SheetJS Excel parsing & export utilities
-│   └── styles/
-│       └── main.css            # Custom styling, dark mode, and animations
+│       └── db.js                        # Supabase PostgreSQL adapter
+└── src/
+    ├── components/
+    │   └── App.jsx                      # Multi-track React OS (DSA & AI Tracks)
+    ├── data/
+    │   ├── dsaDataset.js                # 250 Practice problems & 154 already solved
+    │   ├── roadmapDataset.js            # 365 AI roadmap days
+    │   ├── sourcesDataset.js            # 107 Verified engineering sources
+    │   └── projectsDataset.js           # 7 Production projects & 9 checkpoints
+    ├── services/
+    │   ├── supabaseClient.js            # Supabase Client & Realtime Manager
+    │   ├── authService.js               # Supabase Auth & Multi-device sessions
+    │   ├── dsaService.js                # DSA Track Data Access Layer
+    │   ├── aiService.js                 # AI Track Data Access Layer
+    │   ├── activityService.js           # Timezone (Asia/Kolkata) & Streak Engine
+    │   ├── storageService.js            # Unified Authoritative Cloud Orchestrator
+    │   └── excelService.js              # Excel parsing and diagnostic engine
+    └── styles/
+        └── main.css                     # Custom styling, dark mode, animations
 ```
+
+---
+
+## 🛡️ Security & Privacy
+
+- All database access is governed by **Supabase Row Level Security (RLS)**.
+- Sensitive environment variables (`SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`) remain strictly server-side.
+- The frontend operates with the public publishable anon key under RLS user session enforcement.

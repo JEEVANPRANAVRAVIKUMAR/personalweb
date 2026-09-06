@@ -1,20 +1,16 @@
-// storageService.js - Real-World Multi-Device Synchronized Storage Engine
+// storageService.js - Authoritative Supabase Cloud-First Multi-Device Orchestrator
+import { supabase, supabaseManager } from './supabaseClient.js';
+import { authService } from './authService.js';
+import { DsaService } from './dsaService.js';
+import { AiService } from './aiService.js';
+import { ActivityService } from './activityService.js';
 import { getEnrichedRoadmapDays } from '../data/roadmapDataset.js';
 import { PROJECTS_DATASET, CHECKPOINTS_DATASET } from '../data/projectsDataset.js';
-import { SOURCES_DATASET } from '../data/sourcesDataset.js';
 import { DSA_CATEGORIES, RAW_DSA_PRACTICE_FALLBACK, RAW_DSA_ALREADY_SOLVED_FALLBACK } from '../data/dsaDataset.js';
 
-// STORAGE KEYS
-const STORAGE_KEY_DAYS = 'ai_eng_roadmap_days_v1';
-const STORAGE_KEY_PROJECTS = 'ai_eng_projects_v1';
-const STORAGE_KEY_CHECKPOINTS = 'ai_eng_checkpoints_v1';
-const STORAGE_KEY_SETTINGS = 'ai_eng_settings_v1';
-const STORAGE_KEY_SESSIONS = 'ai_eng_sessions_v1';
-
-const STORAGE_KEY_DSA_PROBLEMS = 'dsa_practice_problems_v1';
-const STORAGE_KEY_DSA_ALREADY_SOLVED = 'dsa_already_solved_v1';
-const STORAGE_KEY_DSA_SETTINGS = 'dsa_settings_v1';
-const STORAGE_KEY_SYNC_META = 'tracker_sync_meta_v1';
+const STORAGE_KEY_MIGRATED = 'jeevanpranav_cloud_migrated_v2';
+const STORAGE_KEY_SETTINGS = 'ai_eng_settings_v2';
+const STORAGE_KEY_DSA_SETTINGS = 'dsa_settings_v2';
 
 const DEFAULT_AI_SETTINGS = {
   dailyTargetMinutes: 120, // 2 hours
@@ -28,7 +24,7 @@ const DEFAULT_AI_SETTINGS = {
 };
 
 const DEFAULT_DSA_SETTINGS = {
-  dailyTarget: 3, // 3 problems/day (~12 weeks) or 5 problems/day (~7 weeks)
+  dailyTarget: 3,
   theme: "dark",
   revisionIntervals: [3, 14]
 };
@@ -47,155 +43,241 @@ class StorageService {
     this.dsaAlreadySolved = [];
     this.dsaSettings = DEFAULT_DSA_SETTINGS;
 
-    // Cloud Sync State
-    this.syncState = 'synced'; // 'synced' | 'syncing' | 'offline' | 'local_fallback'
+    // Cloud Database State
+    this.syncState = 'synced'; // 'synced' | 'syncing' | 'error' | 'offline'
     this.lastSyncedAt = null;
-    this.activeAdapter = 'local';
-    this.syncTimeout = null;
-    this.isPulling = false;
+    this.activeAdapter = 'supabase';
+    this.lastError = null;
+    this.isLoading = true;
 
     this.listeners = new Set();
+    this.realtimeCleanups = [];
+
     this.init();
     this.setupMultiDeviceSyncListeners();
   }
 
-  init() {
+  async init() {
+    this.isLoading = true;
+    this.notify();
+
+    // 1. Load initial offline-safe baseline
+    this.days = getEnrichedRoadmapDays();
+    this.projects = JSON.parse(JSON.stringify(PROJECTS_DATASET));
+    this.checkpoints = JSON.parse(JSON.stringify(CHECKPOINTS_DATASET));
+    this.dsaProblems = RAW_DSA_PRACTICE_FALLBACK && RAW_DSA_PRACTICE_FALLBACK.length > 0
+      ? JSON.parse(JSON.stringify(RAW_DSA_PRACTICE_FALLBACK))
+      : [];
+    this.dsaAlreadySolved = RAW_DSA_ALREADY_SOLVED_FALLBACK && RAW_DSA_ALREADY_SOLVED_FALLBACK.length > 0
+      ? JSON.parse(JSON.stringify(RAW_DSA_ALREADY_SOLVED_FALLBACK))
+      : [];
+
+    // 2. Fetch authoritative state from Supabase Cloud Database
+    await this.fetchFromDatabase();
+
+    // 3. Check for one-time migration of previous local storage
+    await this.checkAndMigrateLegacyLocalStorage();
+
+    // 4. Setup Supabase Realtime Channels
+    this.setupRealtimeSubscriptions();
+
+    this.isLoading = false;
+    this.notify();
+  }
+
+  /**
+   * Authoritative fetch from Supabase PostgreSQL
+   */
+  async fetchFromDatabase() {
+    const userId = authService.getUserId();
+    this.syncState = 'syncing';
+    this.notify();
+
     try {
-      const getDays = typeof getEnrichedRoadmapDays !== 'undefined' ? getEnrichedRoadmapDays : (window.getEnrichedRoadmapDays || (() => []));
-      const projs = typeof PROJECTS_DATASET !== 'undefined' ? PROJECTS_DATASET : (window.PROJECTS_DATASET || []);
-      const cps = typeof CHECKPOINTS_DATASET !== 'undefined' ? CHECKPOINTS_DATASET : (window.CHECKPOINTS_DATASET || []);
-
-      // 1. AI: Load days
-      const rawDays = localStorage.getItem(STORAGE_KEY_DAYS);
-      if (rawDays) {
-        this.days = JSON.parse(rawDays);
-      } else {
-        this.days = getDays();
-        this.saveDays(false);
+      // 1. Fetch DSA Problems & User Progress
+      const dsaResult = await DsaService.getMergedProblems(userId);
+      if (dsaResult.success && Array.isArray(dsaResult.data) && dsaResult.data.length > 0) {
+        this.dsaProblems = dsaResult.data;
       }
 
-      // 2. AI: Load projects
-      const rawProjects = localStorage.getItem(STORAGE_KEY_PROJECTS);
-      if (rawProjects) {
-        this.projects = JSON.parse(rawProjects);
-      } else {
-        this.projects = JSON.parse(JSON.stringify(projs));
-        this.saveProjects(false);
+      // 2. Fetch DSA Already Solved & Revision State
+      const solvedResult = await DsaService.getMergedAlreadySolved(userId);
+      if (solvedResult.success && Array.isArray(solvedResult.data) && solvedResult.data.length > 0) {
+        this.dsaAlreadySolved = solvedResult.data;
       }
 
-      // 3. AI: Load checkpoints
-      const rawCPs = localStorage.getItem(STORAGE_KEY_CHECKPOINTS);
-      if (rawCPs) {
-        this.checkpoints = JSON.parse(rawCPs);
-      } else {
-        this.checkpoints = cps.map(cp => ({
-          ...cp,
-          status: "PENDING",
-          scores: { theory: 0, implementation: 0, debugging: 0, explanation: 0, project: 0 },
-          totalScore: 0,
-          remarks: "",
-          reviewedAt: null
-        }));
-        this.saveCheckpoints(false);
+      // 3. Fetch AI Roadmap Days, Progress & Doubts
+      const aiResult = await AiService.getMergedRoadmapDays(userId);
+      if (aiResult.success && Array.isArray(aiResult.data) && aiResult.data.length > 0) {
+        this.days = aiResult.data;
       }
 
-      // 4. AI: Load settings
-      const rawSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (rawSettings) {
-        this.settings = { ...DEFAULT_AI_SETTINGS, ...JSON.parse(rawSettings) };
+      // 4. Fetch AI Projects
+      const projResult = await AiService.getMergedProjects(userId);
+      if (projResult.success && Array.isArray(projResult.projects)) {
+        this.projects = projResult.projects;
       }
 
-      // 5. AI: Load sessions
-      const rawSessions = localStorage.getItem(STORAGE_KEY_SESSIONS);
-      if (rawSessions) {
-        this.sessions = JSON.parse(rawSessions);
-      }
-
-      // 6. DSA: Load practice problems
-      const rawDsa = localStorage.getItem(STORAGE_KEY_DSA_PROBLEMS);
-      if (rawDsa) {
-        this.dsaProblems = JSON.parse(rawDsa);
-      } else {
-        const rawPracticeCache = localStorage.getItem('RAW_DSA_PRACTICE');
-        if (rawPracticeCache) {
-          this.dsaProblems = JSON.parse(rawPracticeCache);
-        } else if (RAW_DSA_PRACTICE_FALLBACK && RAW_DSA_PRACTICE_FALLBACK.length > 0) {
-          this.dsaProblems = JSON.parse(JSON.stringify(RAW_DSA_PRACTICE_FALLBACK));
-        } else {
-          this.dsaProblems = [];
-        }
-        if (this.dsaProblems.length > 0) this.saveDsaProblems(false);
-      }
-
-      // 7. DSA: Load already solved problems
-      const rawAlreadySolved = localStorage.getItem(STORAGE_KEY_DSA_ALREADY_SOLVED);
-      if (rawAlreadySolved) {
-        this.dsaAlreadySolved = JSON.parse(rawAlreadySolved);
-      } else {
-        const rawSolvedCache = localStorage.getItem('RAW_DSA_ALREADY_SOLVED');
-        if (rawSolvedCache) {
-          this.dsaAlreadySolved = JSON.parse(rawSolvedCache);
-        } else if (RAW_DSA_ALREADY_SOLVED_FALLBACK && RAW_DSA_ALREADY_SOLVED_FALLBACK.length > 0) {
-          this.dsaAlreadySolved = JSON.parse(JSON.stringify(RAW_DSA_ALREADY_SOLVED_FALLBACK));
-        } else {
-          this.dsaAlreadySolved = [];
-        }
-        if (this.dsaAlreadySolved.length > 0) this.saveDsaAlreadySolved(false);
-      }
-
-      // 8. DSA: Load settings
-      const rawDsaSettings = localStorage.getItem(STORAGE_KEY_DSA_SETTINGS);
-      if (rawDsaSettings) {
-        this.dsaSettings = { ...DEFAULT_DSA_SETTINGS, ...JSON.parse(rawDsaSettings) };
-      }
-
-      // 9. Load Sync Meta
-      const rawSyncMeta = localStorage.getItem(STORAGE_KEY_SYNC_META);
-      if (rawSyncMeta) {
-        const meta = JSON.parse(rawSyncMeta);
-        this.lastSyncedAt = meta.lastSyncedAt;
-        this.activeAdapter = meta.activeAdapter || 'local';
-      }
-
-      // 10. Initial pull from Cloud Database
-      setTimeout(() => this.pullCloudSync(true), 300);
-
-    } catch (e) {
-      console.error("StorageService init error:", e);
-      this.days = getEnrichedRoadmapDays();
-      this.projects = JSON.parse(JSON.stringify(PROJECTS_DATASET));
-      this.checkpoints = JSON.parse(JSON.stringify(CHECKPOINTS_DATASET));
-      this.settings = DEFAULT_AI_SETTINGS;
+      this.syncState = 'synced';
+      this.lastSyncedAt = new Date().toISOString();
+      this.lastError = null;
+      this.activeAdapter = 'supabase';
+    } catch (err) {
+      console.error("StorageService fetch error:", err);
+      this.syncState = 'error';
+      this.lastError = err.message;
+    } finally {
+      this.notify();
     }
+  }
+
+  /**
+   * One-time safe migration from previous browser localStorage to Supabase
+   */
+  async checkAndMigrateLegacyLocalStorage() {
+    try {
+      if (typeof window === 'undefined') return;
+      const alreadyMigrated = localStorage.getItem(STORAGE_KEY_MIGRATED);
+      if (alreadyMigrated) return;
+
+      const userId = authService.getUserId();
+      console.log("Checking for previous local progress to migrate to Supabase...");
+
+      // 1. Check legacy DSA problems
+      const rawLegacyDsa = localStorage.getItem('dsa_practice_problems_v1') || localStorage.getItem('RAW_DSA_PRACTICE');
+      if (rawLegacyDsa) {
+        const legacyList = JSON.parse(rawLegacyDsa);
+        for (const item of legacyList) {
+          if (item.status === 'DONE' || item.attempts > 0 || item.notes || item.mistakes || item.mastery > 0) {
+            await DsaService.updateProblemProgress(userId, item.id, {
+              status: item.status,
+              dateSolved: item.dateSolved,
+              attempts: item.attempts,
+              notes: item.notes,
+              mistakes: item.mistakes,
+              mastery: item.mastery
+            });
+          }
+        }
+      }
+
+      // 2. Check legacy AI days
+      const rawLegacyDays = localStorage.getItem('ai_eng_roadmap_days_v1');
+      if (rawLegacyDays) {
+        const legacyDays = JSON.parse(rawLegacyDays);
+        for (const day of legacyDays) {
+          if (day.status === 'COMPLETED' || day.remarks || day.notes || day.mastery > 0) {
+            await AiService.updateDayProgress(userId, day.day, {
+              status: day.status,
+              remarks: day.remarks,
+              notes: day.notes,
+              mastery: day.mastery,
+              completedAt: day.completedAt
+            });
+          }
+        }
+      }
+
+      localStorage.setItem(STORAGE_KEY_MIGRATED, 'true');
+      console.log("✓ Migration check completed.");
+    } catch (e) {
+      console.warn("Migration check note:", e.message);
+    }
+  }
+
+  /**
+   * Realtime event subscribers for cross-device instant sync
+   */
+  setupRealtimeSubscriptions() {
+    // Clean up existing
+    this.realtimeCleanups.forEach(fn => fn());
+    this.realtimeCleanups = [];
+
+    const userId = authService.getUserId();
+
+    // 1. Subscribe to DSA Problem Progress
+    const unsubDsa = DsaService.subscribeToProgress(userId, (payload) => {
+      if (payload.new && payload.new.problem_id) {
+        const row = payload.new;
+        const idx = this.dsaProblems.findIndex(p => p.id === row.problem_id);
+        if (idx !== -1) {
+          this.dsaProblems[idx] = {
+            ...this.dsaProblems[idx],
+            status: row.status,
+            dateSolved: row.date_solved,
+            attempts: row.attempts,
+            notes: row.notes,
+            mistakes: row.mistakes,
+            mastery: row.mastery,
+            nextRevisionDate: row.next_revision_date
+          };
+          this.notify();
+        }
+      }
+    });
+    this.realtimeCleanups.push(unsubDsa);
+
+    // 2. Subscribe to AI Roadmap Progress
+    const unsubAi = AiService.subscribeToProgress(userId, (payload) => {
+      if (payload.new && payload.new.day) {
+        const row = payload.new;
+        const idx = this.days.findIndex(d => d.day === row.day);
+        if (idx !== -1) {
+          this.days[idx] = {
+            ...this.days[idx],
+            status: row.status,
+            mastery: row.mastery,
+            timeSpentMinutes: row.time_spent_minutes,
+            remarks: row.remarks,
+            notes: row.notes,
+            completedAt: row.completed_at,
+            nextRevisionDate: row.next_revision_date
+          };
+          this.notify();
+        }
+      }
+    });
+    this.realtimeCleanups.push(unsubAi);
+
+    // 3. Subscribe to AI Doubts
+    const unsubDoubts = AiService.subscribeToDoubts(userId, (payload) => {
+      if (payload.eventType === 'INSERT' && payload.new) {
+        const row = payload.new;
+        const dayIdx = this.days.findIndex(d => d.day === row.day);
+        if (dayIdx !== -1) {
+          const doubts = this.days[dayIdx].doubts || [];
+          if (!doubts.some(d => d.id === row.id)) {
+            doubts.unshift({
+              id: row.id,
+              dayNum: row.day,
+              topic: row.topic,
+              question: row.question,
+              userUnderstanding: row.user_understanding,
+              status: row.status,
+              createdAt: row.created_at,
+              solution: null
+            });
+            this.days[dayIdx].doubts = doubts;
+            this.notify();
+          }
+        }
+      }
+    });
+    this.realtimeCleanups.push(unsubDoubts);
   }
 
   setupMultiDeviceSyncListeners() {
     if (typeof window === 'undefined') return;
 
-    // Auto-pull whenever user focuses window or returns to tab on another device
-    window.addEventListener('focus', () => {
-      this.pullCloudSync(true);
-    });
-
+    // Refresh data whenever tab/phone screen becomes visible
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        this.pullCloudSync(true);
+        this.fetchFromDatabase();
       }
     });
 
-    // Periodic sync every 45 seconds (like Google Docs / Notion)
-    setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        this.pullCloudSync(true);
-      }
-    }, 45000);
-
-    // Flush any pending changes immediately before closing/switching app
-    window.addEventListener('beforeunload', () => {
-      if (this.syncTimeout) {
-        clearTimeout(this.syncTimeout);
-        this.pushCloudSyncSync();
-      }
+    window.addEventListener('focus', () => {
+      this.fetchFromDatabase();
     });
   }
 
@@ -214,548 +296,60 @@ class StorageService {
     }
   }
 
-  // ==========================================
-  // REAL-TIME MULTI-DEVICE CLOUD SYNC
-  // ==========================================
-
-  scheduleCloudSync() {
-    if (this.syncTimeout) clearTimeout(this.syncTimeout);
-    this.syncState = 'syncing';
-    this.notify();
-
-    // Fast 300ms debounce for instant cross-device synchronization
-    this.syncTimeout = setTimeout(async () => {
-      await this.pushCloudSync();
-    }, 300);
-  }
-
-  getPayload() {
-    return {
-      days: this.days,
-      dsaProblems: this.dsaProblems,
-      dsaAlreadySolved: this.dsaAlreadySolved,
-      doubts: this.getAllDoubtsList(),
-      projects: this.projects,
-      checkpoints: this.checkpoints,
-      settings: { ai: this.settings, dsa: this.dsaSettings },
-      sessions: this.sessions
-    };
-  }
-
-  async pushCloudSync() {
-    try {
-      const payload = this.getPayload();
-      const res = await fetch('/api/sync?username=JeevanPranav', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        this.syncState = 'synced';
-        this.lastSyncedAt = data.updatedAt || new Date().toISOString();
-        this.activeAdapter = data.adapter || 'cloud';
-        localStorage.setItem(STORAGE_KEY_SYNC_META, JSON.stringify({
-          lastSyncedAt: this.lastSyncedAt,
-          activeAdapter: this.activeAdapter
-        }));
-      } else {
-        this.syncState = 'local_fallback';
-      }
-    } catch (e) {
-      this.syncState = 'offline';
-    } finally {
-      this.notify();
-    }
-  }
-
-  pushCloudSyncSync() {
-    try {
-      const payload = this.getPayload();
-      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/sync?username=JeevanPranav', blob);
-      }
-    } catch (e) {}
-  }
-
-  async pullCloudSync(silent = false) {
-    if (this.isPulling) return;
-    this.isPulling = true;
-    try {
-      const res = await fetch('/api/sync?username=JeevanPranav');
-      if (res.ok) {
-        const result = await res.json();
-        if (result.success && result.data) {
-          const cloud = result.data;
-          let changed = false;
-
-          // 1. SMART MERGE: AI Days
-          if (Array.isArray(cloud.days) && cloud.days.length === 365) {
-            cloud.days.forEach(cloudDay => {
-              const localDay = this.days.find(d => d.day === cloudDay.day);
-              if (localDay) {
-                // If cloud day is COMPLETED or has newer remarks/mastery, apply to local
-                if (cloudDay.status === 'COMPLETED' && localDay.status !== 'COMPLETED') {
-                  localDay.status = 'COMPLETED';
-                  localDay.completedAt = cloudDay.completedAt || new Date().toISOString();
-                  changed = true;
-                } else if (cloudDay.status && cloudDay.status !== localDay.status && localDay.status === 'NOT_STARTED') {
-                  localDay.status = cloudDay.status;
-                  changed = true;
-                }
-
-                if (cloudDay.remarks && cloudDay.remarks !== localDay.remarks) {
-                  localDay.remarks = cloudDay.remarks;
-                  changed = true;
-                }
-                if (cloudDay.notes && cloudDay.notes !== localDay.notes) {
-                  localDay.notes = cloudDay.notes;
-                  changed = true;
-                }
-                if (cloudDay.mastery && cloudDay.mastery !== localDay.mastery) {
-                  localDay.mastery = cloudDay.mastery;
-                  changed = true;
-                }
-                if (Array.isArray(cloudDay.doubts) && cloudDay.doubts.length > (localDay.doubts?.length || 0)) {
-                  localDay.doubts = cloudDay.doubts;
-                  changed = true;
-                }
-              }
-            });
-            if (changed) {
-              localStorage.setItem(STORAGE_KEY_DAYS, JSON.stringify(this.days));
-            }
-          }
-
-          // 2. SMART MERGE: DSA Problems
-          if (Array.isArray(cloud.dsaProblems) && cloud.dsaProblems.length > 0) {
-            cloud.dsaProblems.forEach(cloudP => {
-              const localP = this.dsaProblems.find(p => p.id === cloudP.id);
-              if (localP) {
-                if (cloudP.status === 'DONE' && localP.status !== 'DONE') {
-                  localP.status = 'DONE';
-                  localP.dateSolved = cloudP.dateSolved || new Date().toISOString().split('T')[0];
-                  changed = true;
-                } else if (cloudP.status && cloudP.status !== localP.status && localP.status === 'NOT_STARTED') {
-                  localP.status = cloudP.status;
-                  changed = true;
-                }
-
-                if ((cloudP.attempts || 0) > (localP.attempts || 0)) {
-                  localP.attempts = cloudP.attempts;
-                  changed = true;
-                }
-                if (cloudP.notes && cloudP.notes !== localP.notes) {
-                  localP.notes = cloudP.notes;
-                  changed = true;
-                }
-                if (cloudP.mistakes && cloudP.mistakes !== localP.mistakes) {
-                  localP.mistakes = cloudP.mistakes;
-                  changed = true;
-                }
-                if (cloudP.mastery && cloudP.mastery !== localP.mastery) {
-                  localP.mastery = cloudP.mastery;
-                  changed = true;
-                }
-              }
-            });
-            if (changed) {
-              localStorage.setItem(STORAGE_KEY_DSA_PROBLEMS, JSON.stringify(this.dsaProblems));
-            }
-          }
-
-          // 3. Projects & Checkpoints Merge
-          if (Array.isArray(cloud.projects) && cloud.projects.length > 0) {
-            this.projects = cloud.projects;
-            localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(this.projects));
-            changed = true;
-          }
-          if (Array.isArray(cloud.checkpoints) && cloud.checkpoints.length > 0) {
-            this.checkpoints = cloud.checkpoints;
-            localStorage.setItem(STORAGE_KEY_CHECKPOINTS, JSON.stringify(this.checkpoints));
-            changed = true;
-          }
-
-          this.syncState = 'synced';
-          this.lastSyncedAt = cloud.updatedAt || new Date().toISOString();
-          this.activeAdapter = result.adapter || 'cloud';
-          localStorage.setItem(STORAGE_KEY_SYNC_META, JSON.stringify({
-            lastSyncedAt: this.lastSyncedAt,
-            activeAdapter: this.activeAdapter
-          }));
-
-          if (changed) this.notify();
-        }
-      }
-    } catch (e) {
-      this.syncState = 'offline';
-      if (!silent) this.notify();
-    } finally {
-      this.isPulling = false;
-    }
-  }
-
   getSyncInfo() {
     return {
       state: this.syncState,
       lastSyncedAt: this.lastSyncedAt,
-      adapter: this.activeAdapter
+      adapter: this.activeAdapter,
+      error: this.lastError,
+      isLoading: this.isLoading
     };
   }
 
-  getAllDoubtsList() {
-    const list = [];
-    this.days.forEach(d => {
-      if (d.doubts && Array.isArray(d.doubts)) {
-        list.push(...d.doubts);
-      }
-    });
-    return list;
-  }
-
   // ==========================================
-  // AI ENGINEER TRACK METHODS
+  // DSA TRACK MUTATIONS (OPTIMISTIC + DATABASE)
   // ==========================================
-  saveDays(shouldSync = true) {
-    try {
-      localStorage.setItem(STORAGE_KEY_DAYS, JSON.stringify(this.days));
-      this.notify();
-      if (shouldSync) this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save AI days to localStorage:", e);
-    }
-  }
-
-  saveProjects(shouldSync = true) {
-    try {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(this.projects));
-      this.notify();
-      if (shouldSync) this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save AI projects:", e);
-    }
-  }
-
-  saveCheckpoints(shouldSync = true) {
-    try {
-      localStorage.setItem(STORAGE_KEY_CHECKPOINTS, JSON.stringify(this.checkpoints));
-      this.notify();
-      if (shouldSync) this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save AI checkpoints:", e);
-    }
-  }
-
-  saveSettings(newSettings) {
-    this.settings = { ...this.settings, ...newSettings };
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
-    this.notify();
-    this.scheduleCloudSync();
-  }
-
-  saveSessions() {
-    try {
-      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(this.sessions));
-      this.notify();
-      this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save AI sessions:", e);
-    }
-  }
-
-  getDay(dayNum) {
-    return this.days.find(d => d.day === dayNum);
-  }
-
-  updateDay(dayNum, updates) {
-    const idx = this.days.findIndex(d => d.day === dayNum);
-    if (idx !== -1) {
-      this.days[idx] = { ...this.days[idx], ...updates };
-      this.saveDays();
-      return this.days[idx];
-    }
-    return null;
-  }
-
-  setStatus(dayNum, status) {
-    const day = this.getDay(dayNum);
-    if (!day) return;
-
-    const updates = { status };
-    if (status === 'COMPLETED') {
-      updates.completedAt = new Date().toISOString();
-      if (!day.mastery || day.mastery === 0) updates.mastery = 3;
-    }
-    this.updateDay(dayNum, updates);
-  }
-
-  setRemarks(dayNum, remarks) {
-    this.updateDay(dayNum, { remarks });
-  }
-
-  setNotes(dayNum, notes) {
-    this.updateDay(dayNum, { notes });
-  }
-
-  setMastery(dayNum, mastery) {
-    this.updateDay(dayNum, { mastery });
-  }
-
-  addDoubt(dayNum, { question, userUnderstanding }) {
-    const day = this.getDay(dayNum);
-    if (!day) return null;
-
-    const doubt = {
-      id: `doubt_${dayNum}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      dayNum,
-      topic: day.topic,
-      question: question.trim(),
-      userUnderstanding: (userUnderstanding || '').trim(),
-      status: 'OPEN',
-      createdAt: new Date().toISOString(),
-      solution: null
-    };
-
-    const doubts = day.doubts || [];
-    this.updateDay(dayNum, { doubts: [...doubts, doubt] });
-    return doubt;
-  }
-
-  resolveDoubt(dayNum, doubtId, { answer, explanation }) {
-    const day = this.getDay(dayNum);
-    if (!day || !day.doubts) return false;
-
-    const updatedDoubts = day.doubts.map(d => {
-      if (d.id === doubtId) {
-        return {
-          ...d,
-          status: 'RESOLVED',
-          resolvedAt: new Date().toISOString(),
-          solution: {
-            answer: answer.trim(),
-            explanation: (explanation || '').trim(),
-            verifiedAt: new Date().toISOString()
-          }
-        };
-      }
-      return d;
-    });
-
-    this.updateDay(dayNum, { doubts: updatedDoubts });
-    return true;
-  }
-
-  deleteDoubt(dayNum, doubtId) {
-    const day = this.getDay(dayNum);
-    if (!day || !day.doubts) return false;
-
-    const updatedDoubts = day.doubts.filter(d => d.id !== doubtId);
-    this.updateDay(dayNum, { doubts: updatedDoubts });
-    return true;
-  }
-
-  scheduleRevision(dayNum, intervalDays = 1) {
-    const day = this.getDay(dayNum);
-    if (!day) return;
-
-    const now = new Date();
-    const scheduledDate = new Date(now.setDate(now.getDate() + intervalDays)).toISOString().split('T')[0];
-
-    const currentIntervals = day.revisionSchedule || [];
-    const newSchedule = [
-      ...currentIntervals,
-      {
-        intervalDays,
-        scheduledDate,
-        createdAt: new Date().toISOString(),
-        completed: false
-      }
-    ];
-
-    this.updateDay(dayNum, {
-      status: 'NEEDS_REVISION',
-      revisionSchedule: newSchedule,
-      nextRevisionDate: scheduledDate
-    });
-  }
-
-  logStudyTime(dayNum, minutes, phase = 'build') {
-    const day = this.getDay(dayNum);
-    if (!day) return;
-
-    const currentMins = day.timeSpentMinutes || 0;
-    const sessionLog = {
-      id: `session_${Date.now()}`,
-      dayNum,
-      minutes,
-      phase,
-      timestamp: new Date().toISOString()
-    };
-
-    this.sessions.push(sessionLog);
-    this.saveSessions();
-
-    this.updateDay(dayNum, {
-      timeSpentMinutes: currentMins + minutes,
-      lastStudiedAt: new Date().toISOString()
-    });
-  }
-
-  getDashboardStats() {
-    const totalDays = this.days.length;
-    const completedDays = this.days.filter(d => d.status === 'COMPLETED').length;
-    const inProgressDays = this.days.filter(d => d.status === 'IN_PROGRESS').length;
-    const needsRevisionDays = this.days.filter(d => d.status === 'NEEDS_REVISION').length;
-    const skippedDays = this.days.filter(d => d.status === 'SKIPPED').length;
-    const notStartedDays = totalDays - (completedDays + inProgressDays + needsRevisionDays + skippedDays);
-
-    let allDoubts = [];
-    this.days.forEach(d => {
-      if (d.doubts && Array.isArray(d.doubts)) {
-        allDoubts.push(...d.doubts);
-      }
-    });
-    const unresolvedDoubts = allDoubts.filter(d => d.status === 'OPEN');
-    const resolvedDoubts = allDoubts.filter(d => d.status === 'RESOLVED');
-
-    const totalMinutes = this.days.reduce((acc, d) => acc + (d.timeSpentMinutes || 0), 0);
-    const totalHours = (totalMinutes / 60).toFixed(1);
-
-    const ratedDays = this.days.filter(d => d.mastery && d.mastery > 0);
-    const avgMastery = ratedDays.length > 0
-      ? (ratedDays.reduce((acc, d) => acc + d.mastery, 0) / ratedDays.length).toFixed(1)
-      : '0.0';
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const revisionDue = this.days.filter(d => {
-      if (d.status === 'NEEDS_REVISION') return true;
-      if (d.nextRevisionDate && d.nextRevisionDate <= todayStr) return true;
-      return false;
-    });
-
-    const phaseStats = {};
-    this.days.forEach(d => {
-      if (!phaseStats[d.phase]) {
-        phaseStats[d.phase] = { total: 0, completed: 0, inProgress: 0, needsRevision: 0 };
-      }
-      phaseStats[d.phase].total += 1;
-      if (d.status === 'COMPLETED') phaseStats[d.phase].completed += 1;
-      if (d.status === 'IN_PROGRESS') phaseStats[d.phase].inProgress += 1;
-      if (d.status === 'NEEDS_REVISION') phaseStats[d.phase].needsRevision += 1;
-    });
-
-    const weakAreas = [];
-    this.days.forEach(d => {
-      const openDoubtsCount = (d.doubts || []).filter(doubt => doubt.status === 'OPEN').length;
-      const isLowMastery = (d.mastery && d.mastery <= 2);
-      const isRevision = d.status === 'NEEDS_REVISION';
-
-      if (openDoubtsCount > 0 || isLowMastery || isRevision) {
-        let severityScore = 0;
-        const reasons = [];
-
-        if (openDoubtsCount > 0) {
-          severityScore += openDoubtsCount * 3;
-          reasons.push(`${openDoubtsCount} open doubt${openDoubtsCount > 1 ? 's' : ''}`);
-        }
-        if (isLowMastery) {
-          severityScore += (3 - (d.mastery || 0)) * 2;
-          reasons.push(`Low mastery rating (${d.mastery}/5)`);
-        }
-        if (isRevision) {
-          severityScore += 2;
-          reasons.push(`Flagged for revision`);
-        }
-
-        weakAreas.push({
-          dayNum: d.day,
-          topic: d.topic,
-          phase: d.phase,
-          severityScore,
-          reasons
-        });
-      }
-    });
-
-    weakAreas.sort((a, b) => b.severityScore - a.severityScore);
-
-    return {
-      totalDays,
-      completedDays,
-      inProgressDays,
-      needsRevisionDays,
-      skippedDays,
-      notStartedDays,
-      progressPercentage: Math.round((completedDays / (totalDays || 1)) * 100),
-      unresolvedDoubtsCount: unresolvedDoubts.length,
-      resolvedDoubtsCount: resolvedDoubts.length,
-      doubtResolutionRate: allDoubts.length > 0 ? Math.round((resolvedDoubts.length / allDoubts.length) * 100) : 100,
-      totalHours,
-      avgMastery,
-      revisionDueCount: revisionDue.length,
-      phaseStats,
-      weakAreas
-    };
-  }
-
-  getTodayDay() {
-    const startDate = new Date(this.settings.startDate || "2026-09-07");
-    const today = new Date();
-    const diffTime = today.getTime() - startDate.getTime();
-    const diffDays = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-
-    const targetDay = this.days.find(d => d.day === diffDays);
-    if (!targetDay || targetDay.status === 'COMPLETED') {
-      const activeDay = this.days.find(d => d.status === 'IN_PROGRESS' || d.status === 'NEEDS_REVISION' || d.status === 'NOT_STARTED');
-      if (activeDay) return activeDay;
-    }
-    return targetDay || this.days[0];
-  }
-
-  // ==========================================
-  // DSA TRACK METHODS
-  // ==========================================
-  saveDsaProblems(shouldSync = true) {
-    try {
-      localStorage.setItem(STORAGE_KEY_DSA_PROBLEMS, JSON.stringify(this.dsaProblems));
-      this.notify();
-      if (shouldSync) this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save DSA problems:", e);
-    }
-  }
-
-  saveDsaAlreadySolved(shouldSync = true) {
-    try {
-      localStorage.setItem(STORAGE_KEY_DSA_ALREADY_SOLVED, JSON.stringify(this.dsaAlreadySolved));
-      this.notify();
-      if (shouldSync) this.scheduleCloudSync();
-    } catch (e) {
-      console.error("Failed to save DSA already solved:", e);
-    }
-  }
-
-  saveDsaSettings(newSettings) {
-    this.dsaSettings = { ...this.dsaSettings, ...newSettings };
-    localStorage.setItem(STORAGE_KEY_DSA_SETTINGS, JSON.stringify(this.dsaSettings));
-    this.notify();
-    this.scheduleCloudSync();
-  }
 
   getDsaProblem(id) {
-    return this.dsaProblems.find(p => p.id === id);
+    return this.dsaProblems.find(p => p.id === id || p.lcNumber === id);
   }
 
-  updateDsaProblem(id, updates) {
-    const idx = this.dsaProblems.findIndex(p => p.id === id);
-    if (idx !== -1) {
-      this.dsaProblems[idx] = { ...this.dsaProblems[idx], ...updates, updatedAt: new Date().toISOString() };
-      this.saveDsaProblems();
-      return this.dsaProblems[idx];
+  async updateDsaProblem(id, updates) {
+    const idx = this.dsaProblems.findIndex(p => p.id === id || p.lcNumber === id);
+    if (idx === -1) return null;
+
+    const previousState = { ...this.dsaProblems[idx] };
+    const problemId = this.dsaProblems[idx].id;
+
+    // 1. Optimistic Update
+    this.dsaProblems[idx] = {
+      ...this.dsaProblems[idx],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    this.syncState = 'syncing';
+    this.notify();
+
+    // 2. Persist to Supabase
+    const userId = authService.getUserId();
+    const result = await DsaService.updateProblemProgress(userId, problemId, updates);
+
+    if (result.success) {
+      this.syncState = 'synced';
+      this.lastSyncedAt = new Date().toISOString();
+      this.lastError = null;
+      if (updates.status === 'DONE') {
+        ActivityService.recordActivity(userId, { dsaCompleted: 1 });
+      }
+    } else {
+      // Rollback on failure
+      console.error("Failed to save DSA update, rolling back:", result.error);
+      this.dsaProblems[idx] = previousState;
+      this.syncState = 'error';
+      this.lastError = result.error || "Failed to save to cloud database.";
     }
-    return null;
+    this.notify();
+    return this.dsaProblems[idx];
   }
 
   setDsaStatus(id, status) {
@@ -764,13 +358,12 @@ class StorageService {
 
     const updates = { status };
     if (status === 'DONE') {
-      updates.dateSolved = new Date().toISOString().split('T')[0];
+      updates.dateSolved = ActivityService.getTodayDateString();
       if (!prob.mastery || prob.mastery === 0) updates.mastery = 4;
       if (!prob.attempts || prob.attempts === 0) updates.attempts = 1;
     } else if (status === 'REVISE') {
       const now = new Date();
-      const nextRev = new Date(now.setDate(now.getDate() + 3)).toISOString().split('T')[0];
-      updates.nextRevisionDate = nextRev;
+      updates.nextRevisionDate = ActivityService.getTodayDateString(3);
     }
     this.updateDsaProblem(id, updates);
   }
@@ -778,7 +371,9 @@ class StorageService {
   incrementDsaAttempts(id) {
     const prob = this.getDsaProblem(id);
     if (!prob) return;
-    this.updateDsaProblem(id, { attempts: (prob.attempts || 0) + 1 });
+    const newAttempts = (prob.attempts || 0) + 1;
+    this.updateDsaProblem(id, { attempts: newAttempts, lastAttemptAt: new Date().toISOString() });
+    DsaService.logAttempt(authService.getUserId(), prob.id, { durationSeconds: 0, result: 'ATTEMPT' });
   }
 
   setDsaNotes(id, notes) {
@@ -798,13 +393,23 @@ class StorageService {
   }
 
   scheduleDsaRevision(id, intervalDays = 3) {
-    const now = new Date();
-    const nextRev = new Date(now.setDate(now.getDate() + intervalDays)).toISOString().split('T')[0];
+    const nextRev = ActivityService.getTodayDateString(intervalDays);
     this.updateDsaProblem(id, {
       status: 'REVISE',
       nextRevisionDate: nextRev,
-      lastRevised: new Date().toISOString().split('T')[0]
+      lastRevised: ActivityService.getTodayDateString()
     });
+  }
+
+  async updateAlreadySolved(id, updates) {
+    const idx = this.dsaAlreadySolved.findIndex(p => p.id === id);
+    if (idx === -1) return;
+
+    this.dsaAlreadySolved[idx] = { ...this.dsaAlreadySolved[idx], ...updates };
+    this.notify();
+
+    const userId = authService.getUserId();
+    await DsaService.updateAlreadySolvedProgress(userId, id, updates);
   }
 
   getDsaStats() {
@@ -813,7 +418,7 @@ class StorageService {
     const inProgress = this.dsaProblems.filter(p => p.status === 'IN_PROGRESS').length;
     const revise = this.dsaProblems.filter(p => p.status === 'REVISE').length;
     const skipped = this.dsaProblems.filter(p => p.status === 'SKIPPED').length;
-    const notStarted = total - (completed + inProgress + revise + skipped);
+    const notStarted = Math.max(0, total - (completed + inProgress + revise + skipped));
 
     const diffStats = {
       Easy: { total: 0, done: 0 },
@@ -825,14 +430,12 @@ class StorageService {
     const patternStats = {};
 
     this.dsaProblems.forEach(p => {
-      // Difficulty
       const diff = p.difficulty || 'Medium';
       if (diffStats[diff]) {
         diffStats[diff].total += 1;
         if (p.status === 'DONE') diffStats[diff].done += 1;
       }
 
-      // Category
       const cat = p.subTopic || 'General';
       if (!categoryStats[cat]) {
         categoryStats[cat] = { total: 0, done: 0, easy: 0, medium: 0, hard: 0, revise: 0 };
@@ -844,7 +447,6 @@ class StorageService {
       if (p.difficulty === 'Medium') categoryStats[cat].medium += 1;
       if (p.difficulty === 'Hard') categoryStats[cat].hard += 1;
 
-      // Pattern
       const pat = (p.pattern || '').trim();
       if (pat) {
         if (!patternStats[pat]) patternStats[pat] = { name: pat, total: 0, done: 0, revise: 0, attempts: 0 };
@@ -855,14 +457,13 @@ class StorageService {
       }
     });
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todaySolved = this.dsaProblems.filter(p => p.dateSolved === todayStr && p.status === 'DONE').length;
-    const revisionDue = this.dsaProblems.filter(p => p.status === 'REVISE' || (p.nextRevisionDate && p.nextRevisionDate <= todayStr));
+    const weakPatterns = Object.values(patternStats)
+      .filter(p => p.total >= 3 && (p.done / p.total) < 0.5)
+      .sort((a, b) => (a.done / a.total) - (b.done / b.total))
+      .slice(0, 5);
 
-    // Weak & Strong Patterns
-    const patternsList = Object.values(patternStats);
-    const weakPatterns = [...patternsList].filter(p => p.revise > 0 || (p.total > 1 && p.done / p.total < 0.5)).sort((a, b) => b.revise - a.revise).slice(0, 5);
-    const strongPatterns = [...patternsList].filter(p => p.done > 0 && p.done / p.total >= 0.7).sort((a, b) => b.done - a.done).slice(0, 5);
+    const todayStr = ActivityService.getTodayDateString();
+    const todayCompleted = this.dsaProblems.filter(p => p.status === 'DONE' && p.dateSolved === todayStr).length;
 
     return {
       total,
@@ -871,70 +472,270 @@ class StorageService {
       revise,
       skipped,
       notStarted,
-      progressPercentage: Math.round((completed / (total || 1)) * 100),
+      progressPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
       difficultyStats: diffStats,
       categoryStats,
-      todayTarget: this.dsaSettings.dailyTarget || 3,
-      todayCompleted: todaySolved,
-      revisionDueCount: revisionDue.length,
       weakPatterns,
-      strongPatterns,
+      todayTarget: this.dsaSettings.dailyTarget || 3,
+      todayCompleted,
       alreadySolvedCount: this.dsaAlreadySolved.length
     };
   }
 
-  getDsaTodayProblems(count = 3) {
-    const active = this.dsaProblems.filter(p => p.status === 'IN_PROGRESS' || p.status === 'REVISE');
-    if (active.length >= count) return active.slice(0, count);
-
-    const notStarted = this.dsaProblems.filter(p => p.status === 'NOT_STARTED');
-    return [...active, ...notStarted.slice(0, count - active.length)];
+  getDsaTodayProblems() {
+    const target = this.dsaSettings.dailyTarget || 3;
+    const pending = this.dsaProblems.filter(p => p.status === 'NOT_STARTED' || p.status === 'IN_PROGRESS');
+    return pending.slice(0, target);
   }
 
   // ==========================================
-  // BACKUP, EXPORT & RESTORE
+  // AI ENGINEER TRACK MUTATIONS (OPTIMISTIC + DATABASE)
   // ==========================================
-  exportDsaJSON() {
-    return JSON.stringify({
-      version: "1.0",
-      track: "DSA",
-      exportedAt: new Date().toISOString(),
-      settings: this.dsaSettings,
-      problems: this.dsaProblems,
-      alreadySolved: this.dsaAlreadySolved
-    }, null, 2);
+
+  getDay(dayNum) {
+    return this.days.find(d => d.day === dayNum);
   }
 
-  exportDsaCSV() {
-    const headers = ["ID", "SubTopic", "LC#", "Problem", "Difficulty", "Pattern", "Companies", "Status", "DateSolved", "Attempts", "Notes", "Mistakes", "Mastery", "Link"];
-    const escape = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
-    const rows = this.dsaProblems.map(p => [
-      p.id,
-      escape(p.subTopic),
-      p.lcNumber,
-      escape(p.problem),
-      p.difficulty,
-      escape(p.pattern),
-      escape(p.companies),
-      p.status,
-      escape(p.dateSolved),
-      p.attempts || 0,
-      escape(p.notes),
-      escape(p.mistakes),
-      p.mastery || 0,
-      escape(p.link)
-    ].join(','));
-    return [headers.join(','), ...rows].join('\n');
-  }
+  async updateDay(dayNum, updates) {
+    const idx = this.days.findIndex(d => d.day === dayNum);
+    if (idx === -1) return null;
 
-  resetAllDsaData() {
-    const rawPracticeCache = localStorage.getItem('RAW_DSA_PRACTICE');
-    if (rawPracticeCache) {
-      this.dsaProblems = JSON.parse(rawPracticeCache);
+    const previousState = { ...this.days[idx] };
+
+    // 1. Optimistic Update
+    this.days[idx] = {
+      ...this.days[idx],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    this.syncState = 'syncing';
+    this.notify();
+
+    // 2. Persist to Supabase
+    const userId = authService.getUserId();
+    const result = await AiService.updateDayProgress(userId, dayNum, updates);
+
+    if (result.success) {
+      this.syncState = 'synced';
+      this.lastSyncedAt = new Date().toISOString();
+      this.lastError = null;
+      if (updates.status === 'COMPLETED') {
+        ActivityService.recordActivity(userId, { aiCompleted: 1 });
+      }
     } else {
-      this.dsaProblems = JSON.parse(JSON.stringify(RAW_DSA_PRACTICE_FALLBACK));
+      console.error("Failed to save AI day update, rolling back:", result.error);
+      this.days[idx] = previousState;
+      this.syncState = 'error';
+      this.lastError = result.error || "Failed to save to cloud database.";
     }
-    this.saveDsaProblems();
+    this.notify();
+    return this.days[idx];
+  }
+
+  setStatus(dayNum, status) {
+    const day = this.getDay(dayNum);
+    if (!day) return;
+
+    const updates = { status };
+    if (status === 'COMPLETED') {
+      updates.completedAt = new Date().toISOString();
+      if (!day.mastery || day.mastery === 0) updates.mastery = 4;
+    }
+    this.updateDay(dayNum, updates);
+  }
+
+  setRemarks(dayNum, remarks) {
+    this.updateDay(dayNum, { remarks });
+  }
+
+  setNotes(dayNum, notes) {
+    this.updateDay(dayNum, { notes });
+  }
+
+  setMastery(dayNum, mastery) {
+    this.updateDay(dayNum, { mastery });
+  }
+
+  async addDoubt(dayNum, { question, userUnderstanding }) {
+    const day = this.getDay(dayNum);
+    if (!day) return null;
+
+    const userId = authService.getUserId();
+    const tempId = `doubt_${Date.now()}`;
+    const newDoubt = {
+      id: tempId,
+      dayNum,
+      topic: day.topic,
+      question: question.trim(),
+      userUnderstanding: (userUnderstanding || '').trim(),
+      status: 'OPEN',
+      createdAt: new Date().toISOString(),
+      solution: null
+    };
+
+    const doubts = day.doubts || [];
+    day.doubts = [newDoubt, ...doubts];
+    this.notify();
+
+    const result = await AiService.addDoubt(userId, {
+      dayNum,
+      topic: day.topic,
+      question,
+      userUnderstanding
+    });
+
+    if (result.success && result.doubt) {
+      newDoubt.id = result.doubt.id;
+      ActivityService.recordActivity(userId, { doubts: 1 });
+    }
+    return newDoubt;
+  }
+
+  async resolveDoubt(dayNum, doubtId, { answer, explanation }) {
+    const day = this.getDay(dayNum);
+    if (!day || !day.doubts) return false;
+
+    const idx = day.doubts.findIndex(d => d.id === doubtId);
+    if (idx !== -1) {
+      day.doubts[idx].status = 'RESOLVED';
+      day.doubts[idx].solution = {
+        answer: answer.trim(),
+        explanation: (explanation || '').trim(),
+        verifiedAt: new Date().toISOString()
+      };
+      this.notify();
+    }
+
+    const userId = authService.getUserId();
+    await AiService.resolveDoubt(userId, doubtId, { answer, explanation });
+    return true;
+  }
+
+  async deleteDoubt(dayNum, doubtId) {
+    const day = this.getDay(dayNum);
+    if (!day || !day.doubts) return false;
+
+    day.doubts = day.doubts.filter(d => d.id !== doubtId);
+    this.notify();
+
+    const userId = authService.getUserId();
+    await AiService.deleteDoubt(userId, doubtId);
+    return true;
+  }
+
+  scheduleRevision(dayNum, intervalDays = 1) {
+    const nextRev = ActivityService.getTodayDateString(intervalDays);
+    this.updateDay(dayNum, {
+      status: 'NEEDS_REVISION',
+      nextRevisionDate: nextRev
+    });
+  }
+
+  logStudyTime(dayNum, minutes, phase = 'build') {
+    const day = this.getDay(dayNum);
+    if (!day) return;
+
+    const currentMins = day.timeSpentMinutes || 0;
+    this.updateDay(dayNum, { timeSpentMinutes: currentMins + minutes });
+
+    const userId = authService.getUserId();
+    AiService.logSession(userId, { dayNum, minutes, phase });
+    ActivityService.recordActivity(userId, { studyMinutes: minutes });
+  }
+
+  getDashboardStats() {
+    const totalDays = this.days.length || 365;
+    const completedDays = this.days.filter(d => d.status === 'COMPLETED').length;
+    const progressPercentage = Math.round((completedDays / totalDays) * 100);
+
+    let unresolvedDoubtsCount = 0;
+    let resolvedDoubtsCount = 0;
+    let totalMinutes = 0;
+
+    const activityDates = [];
+
+    this.days.forEach(d => {
+      if (d.doubts && Array.isArray(d.doubts)) {
+        d.doubts.forEach(doubt => {
+          if (doubt.status === 'RESOLVED') resolvedDoubtsCount++;
+          else unresolvedDoubtsCount++;
+        });
+      }
+      totalMinutes += (d.timeSpentMinutes || 0);
+      if (d.completedAt) {
+        activityDates.push(d.completedAt.split('T')[0]);
+      }
+    });
+
+    this.dsaProblems.forEach(p => {
+      if (p.dateSolved) activityDates.push(p.dateSolved);
+    });
+
+    const streak = ActivityService.calculateStreak(activityDates);
+    const totalDoubts = unresolvedDoubtsCount + resolvedDoubtsCount;
+    const doubtResolutionRate = totalDoubts > 0 ? Math.round((resolvedDoubtsCount / totalDoubts) * 100) : 100;
+
+    const todayStr = ActivityService.getTodayDateString();
+    const revisionDueCount = this.days.filter(d => d.status === 'NEEDS_REVISION' || (d.nextRevisionDate && d.nextRevisionDate <= todayStr)).length
+      + this.dsaProblems.filter(p => p.status === 'REVISE' || (p.nextRevisionDate && p.nextRevisionDate <= todayStr)).length;
+
+    return {
+      progressPercentage,
+      completedDays,
+      totalDays,
+      unresolvedDoubtsCount,
+      resolvedDoubtsCount,
+      doubtResolutionRate,
+      revisionDueCount,
+      totalHours: (totalMinutes / 60).toFixed(1),
+      streak
+    };
+  }
+
+  getTodayDay() {
+    // Determine active day by first non-completed day or Day 1
+    const active = this.days.find(d => d.status !== 'COMPLETED');
+    return active || this.days[0];
+  }
+
+  saveSettings(newSettings) {
+    this.settings = { ...this.settings, ...newSettings };
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
+    this.notify();
+  }
+
+  saveDsaSettings(newSettings) {
+    this.dsaSettings = { ...this.dsaSettings, ...newSettings };
+    localStorage.setItem(STORAGE_KEY_DSA_SETTINGS, JSON.stringify(this.dsaSettings));
+    this.notify();
+  }
+
+  // ==========================================
+  // DATA EXPORT & BACKUP
+  // ==========================================
+  exportAllDataAsJson() {
+    const fullBackup = {
+      exportDate: new Date().toISOString(),
+      user: authService.getCurrentUser(),
+      dsaTrack: {
+        problems: this.dsaProblems,
+        alreadySolved: this.dsaAlreadySolved,
+        categories: this.dsaCategories,
+        settings: this.dsaSettings
+      },
+      aiTrack: {
+        days: this.days,
+        projects: this.projects,
+        checkpoints: this.checkpoints,
+        settings: this.settings
+      }
+    };
+    const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jeevanpranav_os_backup_${ActivityService.getTodayDateString()}.json`;
+    a.click();
   }
 }
 
