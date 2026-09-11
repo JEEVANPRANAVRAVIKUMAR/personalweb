@@ -118,13 +118,13 @@ export class AiService {
       };
 
       if (updates.status !== undefined) payload.status = updates.status;
-      if (updates.mastery !== undefined) payload.mastery = updates.mastery;
-      if (updates.timeSpentMinutes !== undefined) payload.time_spent_minutes = updates.timeSpentMinutes;
-      if (updates.remarks !== undefined) payload.remarks = updates.remarks;
-      if (updates.notes !== undefined) payload.notes = updates.notes;
-      if (updates.completedAt !== undefined) payload.completed_at = updates.completedAt;
-      if (updates.nextRevisionDate !== undefined) payload.next_revision_date = updates.nextRevisionDate;
-      if (updates.revisionStep !== undefined) payload.revision_step = updates.revisionStep;
+      if (updates.mastery !== undefined) payload.mastery = Number(updates.mastery) || 0;
+      if (updates.timeSpentMinutes !== undefined) payload.time_spent_minutes = Number(updates.timeSpentMinutes) || 0;
+      if (updates.remarks !== undefined) payload.remarks = updates.remarks || '';
+      if (updates.notes !== undefined) payload.notes = updates.notes || '';
+      if (updates.completedAt !== undefined) payload.completed_at = updates.completedAt ? updates.completedAt : null;
+      if (updates.nextRevisionDate !== undefined) payload.next_revision_date = updates.nextRevisionDate ? updates.nextRevisionDate : null;
+      if (updates.revisionStep !== undefined) payload.revision_step = Number(updates.revisionStep) || 0;
 
       const { data, error } = await supabase
         .from('ai_roadmap_progress')

@@ -1,29 +1,38 @@
 // supabaseClient.js - Robust Client & Realtime Manager for Supabase Cloud Database
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm';
+import { createClient as esmCreateClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm';
 
 // Default / Environment Configuration
 export const SUPABASE_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) 
-  || window.SUPABASE_URL 
+  || (typeof window !== 'undefined' && window.SUPABASE_URL) 
   || 'https://cpvqqbbpcxzfhckpczwr.supabase.co';
 
 export const SUPABASE_ANON_KEY = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) 
-  || window.SUPABASE_ANON_KEY 
+  || (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) 
   || 'sb_publishable_VzkHQZKNoHRQWa0FsfrdMg_6IzW91Le';
 
-// Single Supabase Client instance with persistent session storage & realtime auto-reconnect
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
+// Safe creation function using either imported ESM or UMD global
+function initSupabaseClient() {
+  const clientFactory = (typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function')
+    ? window.supabase.createClient
+    : esmCreateClient;
+
+  return clientFactory(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
     }
-  }
-});
+  });
+}
+
+// Single Supabase Client instance with persistent session storage & realtime auto-reconnect
+export const supabase = initSupabaseClient();
 
 class SupabaseManager {
   constructor() {
@@ -127,6 +136,6 @@ class SupabaseManager {
 export const supabaseManager = new SupabaseManager();
 
 if (typeof window !== 'undefined') {
-  window.supabase = supabase;
+  window.supabaseClient = supabase;
   window.supabaseManager = supabaseManager;
 }

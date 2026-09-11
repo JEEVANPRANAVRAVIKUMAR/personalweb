@@ -8,5 +8,7 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Temp scratch extraction files
+# Temp scratch extraction files & office lock files
 scratch_*.html
+~$*
+~$*.xlsx

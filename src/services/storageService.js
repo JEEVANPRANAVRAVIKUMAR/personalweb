@@ -11,6 +11,8 @@ import { DSA_CATEGORIES, RAW_DSA_PRACTICE_FALLBACK, RAW_DSA_ALREADY_SOLVED_FALLB
 const STORAGE_KEY_MIGRATED = 'jeevanpranav_cloud_migrated_v2';
 const STORAGE_KEY_SETTINGS = 'ai_eng_settings_v2';
 const STORAGE_KEY_DSA_SETTINGS = 'dsa_settings_v2';
+const STORAGE_KEY_AI_CACHE = 'ai_roadmap_progress_cache_v2';
+const STORAGE_KEY_DSA_CACHE = 'dsa_problem_progress_cache_v2';
 
 const DEFAULT_AI_SETTINGS = {
   dailyTargetMinutes: 120, // 2 hours
@@ -57,6 +59,111 @@ class StorageService {
     this.setupMultiDeviceSyncListeners();
   }
 
+  /**
+   * Persist current active progress to resilient local cache (Tier 2 storage)
+   */
+  persistLocalCache() {
+    try {
+      if (typeof window === 'undefined') return;
+      
+      // Cache non-default AI days progress
+      const aiCache = this.days
+        .filter(d => d.status !== 'NOT_STARTED' || d.remarks || d.notes || d.mastery > 0 || (d.doubts && d.doubts.length > 0))
+        .map(d => ({
+          day: d.day,
+          status: d.status,
+          mastery: d.mastery,
+          remarks: d.remarks,
+          notes: d.notes,
+          completedAt: d.completedAt,
+          nextRevisionDate: d.nextRevisionDate,
+          timeSpentMinutes: d.timeSpentMinutes,
+          doubts: d.doubts || []
+        }));
+      localStorage.setItem(STORAGE_KEY_AI_CACHE, JSON.stringify(aiCache));
+
+      // Cache non-default DSA problems progress
+      const dsaCache = this.dsaProblems
+        .filter(p => p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0)
+        .map(p => ({
+          id: p.id,
+          lcNumber: p.lcNumber,
+          status: p.status,
+          mastery: p.mastery,
+          attempts: p.attempts,
+          notes: p.notes,
+          mistakes: p.mistakes,
+          dateSolved: p.dateSolved,
+          nextRevisionDate: p.nextRevisionDate
+        }));
+      localStorage.setItem(STORAGE_KEY_DSA_CACHE, JSON.stringify(dsaCache));
+    } catch (e) {
+      console.warn("StorageService persistLocalCache note:", e.message);
+    }
+  }
+
+  /**
+   * Merge cached local progress into in-memory days and dsaProblems
+   */
+  loadLocalCache() {
+    try {
+      if (typeof window === 'undefined') return;
+
+      // 1. Merge AI cached progress
+      const rawAi = localStorage.getItem(STORAGE_KEY_AI_CACHE);
+      if (rawAi) {
+        const cachedAiList = JSON.parse(rawAi);
+        if (Array.isArray(cachedAiList)) {
+          const cacheMap = new Map(cachedAiList.map(item => [item.day, item]));
+          this.days = this.days.map(d => {
+            const cached = cacheMap.get(d.day);
+            if (cached) {
+              return {
+                ...d,
+                status: cached.status || d.status,
+                mastery: cached.mastery !== undefined ? cached.mastery : d.mastery,
+                remarks: cached.remarks || d.remarks,
+                notes: cached.notes || d.notes,
+                completedAt: cached.completedAt || d.completedAt,
+                nextRevisionDate: cached.nextRevisionDate || d.nextRevisionDate,
+                timeSpentMinutes: cached.timeSpentMinutes || d.timeSpentMinutes,
+                doubts: (cached.doubts && cached.doubts.length > 0) ? cached.doubts : (d.doubts || [])
+              };
+            }
+            return d;
+          });
+        }
+      }
+
+      // 2. Merge DSA cached progress
+      const rawDsa = localStorage.getItem(STORAGE_KEY_DSA_CACHE);
+      if (rawDsa) {
+        const cachedDsaList = JSON.parse(rawDsa);
+        if (Array.isArray(cachedDsaList)) {
+          const cacheMap = new Map(cachedDsaList.map(item => [item.id || item.lcNumber, item]));
+          this.dsaProblems = this.dsaProblems.map(p => {
+            const cached = cacheMap.get(p.id) || cacheMap.get(p.lcNumber);
+            if (cached) {
+              return {
+                ...p,
+                status: cached.status || p.status,
+                mastery: cached.mastery !== undefined ? cached.mastery : p.mastery,
+                attempts: cached.attempts !== undefined ? cached.attempts : p.attempts,
+                notes: cached.notes || p.notes,
+                mistakes: cached.mistakes || p.mistakes,
+                dateSolved: cached.dateSolved || p.dateSolved,
+                nextRevisionDate: cached.nextRevisionDate || p.nextRevisionDate
+              };
+            }
+            return p;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("StorageService loadLocalCache note:", e.message);
+    }
+  }
+
   async init() {
     this.isLoading = true;
     this.notify();
@@ -72,13 +179,19 @@ class StorageService {
       ? JSON.parse(JSON.stringify(RAW_DSA_ALREADY_SOLVED_FALLBACK))
       : [];
 
-    // 2. Fetch authoritative state from Supabase Cloud Database
+    // 2. Load resilient local cache immediately for instantaneous rendering
+    this.loadLocalCache();
+
+    // 3. Fetch authoritative state from Supabase Cloud Database
     await this.fetchFromDatabase();
 
-    // 3. Check for one-time migration of previous local storage
+    // 4. Re-apply any local cached items that might not have reached cloud yet
+    this.loadLocalCache();
+
+    // 5. Check for one-time migration of previous local storage
     await this.checkAndMigrateLegacyLocalStorage();
 
-    // 4. Setup Supabase Realtime Channels
+    // 6. Setup Supabase Realtime Channels
     this.setupRealtimeSubscriptions();
 
     this.isLoading = false;
@@ -86,45 +199,158 @@ class StorageService {
   }
 
   /**
+   * Fast unified cloud sync to user_sync_store
+   */
+  async persistFastCloudSync() {
+    const userId = authService.getUserId() || 'JeevanPranav';
+    const nonDefaultDsa = this.dsaProblems
+      .filter(p => p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0 || p.approach || p.code)
+      .map(p => ({
+        id: p.id,
+        lcNumber: p.lcNumber,
+        status: p.status,
+        dateSolved: p.dateSolved || '',
+        attempts: p.attempts || 0,
+        notes: p.notes || '',
+        mistakes: p.mistakes || '',
+        mastery: p.mastery || 0,
+        priority: p.priority || 'MEDIUM',
+        approach: p.approach || '',
+        code: p.code || '',
+        codeLang: p.codeLang || 'Java',
+        timeComplexity: p.timeComplexity || 'O(N)',
+        spaceComplexity: p.spaceComplexity || 'O(1)',
+        explanation: p.explanation || '',
+        isBookmarked: Boolean(p.isBookmarked),
+        lastAttemptAt: p.lastAttemptAt || null,
+        lastRevised: p.lastRevised || '',
+        nextRevisionDate: p.nextRevisionDate || ''
+      }));
+
+    const nonDefaultAi = this.days
+      .filter(d => d.status !== 'NOT_STARTED' || d.remarks || d.notes || d.mastery > 0 || (d.doubts && d.doubts.length > 0))
+      .map(d => ({
+        day: d.day,
+        status: d.status,
+        mastery: d.mastery || 0,
+        timeSpentMinutes: d.timeSpentMinutes || 0,
+        remarks: d.remarks || '',
+        notes: d.notes || '',
+        completedAt: d.completedAt || null,
+        nextRevisionDate: d.nextRevisionDate || null,
+        revisionStep: d.revisionStep || 0,
+        doubts: d.doubts || []
+      }));
+
+    try {
+      const { error } = await supabase
+        .from('user_sync_store')
+        .upsert({
+          username: userId,
+          dsa_problems: nonDefaultDsa,
+          ai_days: nonDefaultAi,
+          settings: this.settings,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'username' });
+
+      if (!error) {
+        this.syncState = 'synced';
+        this.lastSyncedAt = new Date().toISOString();
+        this.lastError = null;
+      }
+    } catch (e) {
+      console.warn("user_sync_store fast sync note:", e.message);
+    }
+  }
+
+  /**
    * Authoritative fetch from Supabase PostgreSQL
    */
   async fetchFromDatabase() {
-    const userId = authService.getUserId();
+    const userId = authService.getUserId() || 'JeevanPranav';
     this.syncState = 'syncing';
     this.notify();
 
     try {
-      // 1. Fetch DSA Problems & User Progress
-      const dsaResult = await DsaService.getMergedProblems(userId);
-      if (dsaResult.success && Array.isArray(dsaResult.data) && dsaResult.data.length > 0) {
-        this.dsaProblems = dsaResult.data;
+      // 1. Fetch Fast Sync Document from user_sync_store
+      try {
+        const { data: syncDoc, error: syncErr } = await supabase
+          .from('user_sync_store')
+          .select('*')
+          .eq('username', userId)
+          .single();
+
+        if (!syncErr && syncDoc) {
+          if (Array.isArray(syncDoc.dsa_problems) && syncDoc.dsa_problems.length > 0) {
+            const syncMap = new Map(syncDoc.dsa_problems.map(p => [p.id || p.lcNumber, p]));
+            this.dsaProblems = this.dsaProblems.map(p => {
+              const cloudItem = syncMap.get(p.id) || syncMap.get(p.lcNumber);
+              return cloudItem ? { ...p, ...cloudItem } : p;
+            });
+          }
+          if (Array.isArray(syncDoc.ai_days) && syncDoc.ai_days.length > 0) {
+            const syncMap = new Map(syncDoc.ai_days.map(d => [d.day, d]));
+            this.days = this.days.map(d => {
+              const cloudItem = syncMap.get(d.day);
+              return cloudItem ? { ...d, ...cloudItem } : d;
+            });
+          }
+          if (syncDoc.settings && typeof syncDoc.settings === 'object' && Object.keys(syncDoc.settings).length > 0) {
+            this.settings = { ...this.settings, ...syncDoc.settings };
+          }
+        }
+      } catch (syncFetchErr) {
+        console.warn("user_sync_store fetch note:", syncFetchErr.message);
       }
 
-      // 2. Fetch DSA Already Solved & Revision State
+      // 2. Fetch Granular DSA Problems & User Progress
+      const dsaResult = await DsaService.getMergedProblems(userId);
+      if (dsaResult.success && Array.isArray(dsaResult.data) && dsaResult.data.length > 0) {
+        if (!this.dsaProblems || this.dsaProblems.length === 0 || this.dsaProblems.length < dsaResult.data.length) {
+          this.dsaProblems = dsaResult.data;
+        } else {
+          const granularMap = new Map(dsaResult.data.map(p => [p.id || p.lcNumber, p]));
+          this.dsaProblems = this.dsaProblems.map(p => {
+            const gItem = granularMap.get(p.id) || granularMap.get(p.lcNumber);
+            return gItem ? { ...p, ...gItem } : p;
+          });
+        }
+      }
+
+      // 3. Fetch DSA Already Solved & Revision State
       const solvedResult = await DsaService.getMergedAlreadySolved(userId);
       if (solvedResult.success && Array.isArray(solvedResult.data) && solvedResult.data.length > 0) {
         this.dsaAlreadySolved = solvedResult.data;
       }
 
-      // 3. Fetch AI Roadmap Days, Progress & Doubts
+      // 4. Fetch AI Roadmap Days, Progress & Doubts
       const aiResult = await AiService.getMergedRoadmapDays(userId);
       if (aiResult.success && Array.isArray(aiResult.data) && aiResult.data.length > 0) {
-        this.days = aiResult.data;
+        if (!this.days || this.days.length === 0 || this.days.length < aiResult.data.length) {
+          this.days = aiResult.data;
+        } else {
+          const granularAiMap = new Map(aiResult.data.map(d => [d.day, d]));
+          this.days = this.days.map(d => {
+            const gItem = granularAiMap.get(d.day);
+            return gItem ? { ...d, ...gItem } : d;
+          });
+        }
       }
 
-      // 4. Fetch AI Projects
+      // 5. Fetch AI Projects
       const projResult = await AiService.getMergedProjects(userId);
       if (projResult.success && Array.isArray(projResult.projects)) {
         this.projects = projResult.projects;
       }
 
+      this.persistLocalCache();
       this.syncState = 'synced';
       this.lastSyncedAt = new Date().toISOString();
       this.lastError = null;
       this.activeAdapter = 'supabase';
     } catch (err) {
       console.error("StorageService fetch error:", err);
-      this.syncState = 'error';
+      this.syncState = 'offline';
       this.lastError = err.message;
     } finally {
       this.notify();
@@ -193,9 +419,34 @@ class StorageService {
     this.realtimeCleanups.forEach(fn => fn());
     this.realtimeCleanups = [];
 
-    const userId = authService.getUserId();
+    const userId = authService.getUserId() || 'JeevanPranav';
 
-    // 1. Subscribe to DSA Problem Progress
+    // 1. Subscribe to user_sync_store for cross-device instant sync
+    const unsubStore = supabaseManager.subscribeToTable('user_sync_store', 'username', userId, (payload) => {
+      console.log("⚡ Realtime user_sync_store update received from cloud");
+      if (payload.new) {
+        const doc = payload.new;
+        if (Array.isArray(doc.dsa_problems)) {
+          const syncMap = new Map(doc.dsa_problems.map(p => [p.id || p.lcNumber, p]));
+          this.dsaProblems = this.dsaProblems.map(p => {
+            const c = syncMap.get(p.id) || syncMap.get(p.lcNumber);
+            return c ? { ...p, ...c } : p;
+          });
+        }
+        if (Array.isArray(doc.ai_days)) {
+          const syncMap = new Map(doc.ai_days.map(d => [d.day, d]));
+          this.days = this.days.map(d => {
+            const c = syncMap.get(d.day);
+            return c ? { ...d, ...c } : d;
+          });
+        }
+        this.persistLocalCache();
+        this.notify();
+      }
+    });
+    this.realtimeCleanups.push(unsubStore);
+
+    // 2. Subscribe to DSA Problem Progress
     const unsubDsa = DsaService.subscribeToProgress(userId, (payload) => {
       if (payload.new && payload.new.problem_id) {
         const row = payload.new;
@@ -209,15 +460,22 @@ class StorageService {
             notes: row.notes,
             mistakes: row.mistakes,
             mastery: row.mastery,
+            approach: row.my_approach || this.dsaProblems[idx].approach,
+            code: row.my_solution_code || this.dsaProblems[idx].code,
+            codeLang: row.code_language || this.dsaProblems[idx].codeLang,
+            timeComplexity: row.time_complexity || this.dsaProblems[idx].timeComplexity,
+            spaceComplexity: row.space_complexity || this.dsaProblems[idx].spaceComplexity,
+            explanation: row.explanation || this.dsaProblems[idx].explanation,
             nextRevisionDate: row.next_revision_date
           };
+          this.persistLocalCache();
           this.notify();
         }
       }
     });
     this.realtimeCleanups.push(unsubDsa);
 
-    // 2. Subscribe to AI Roadmap Progress
+    // 3. Subscribe to AI Roadmap Progress
     const unsubAi = AiService.subscribeToProgress(userId, (payload) => {
       if (payload.new && payload.new.day) {
         const row = payload.new;
@@ -233,13 +491,14 @@ class StorageService {
             completedAt: row.completed_at,
             nextRevisionDate: row.next_revision_date
           };
+          this.persistLocalCache();
           this.notify();
         }
       }
     });
     this.realtimeCleanups.push(unsubAi);
 
-    // 3. Subscribe to AI Doubts
+    // 4. Subscribe to AI Doubts
     const unsubDoubts = AiService.subscribeToDoubts(userId, (payload) => {
       if (payload.eventType === 'INSERT' && payload.new) {
         const row = payload.new;
@@ -258,6 +517,7 @@ class StorageService {
               solution: null
             });
             this.days[dayIdx].doubts = doubts;
+            this.persistLocalCache();
             this.notify();
           }
         }
@@ -269,7 +529,50 @@ class StorageService {
   setupMultiDeviceSyncListeners() {
     if (typeof window === 'undefined') return;
 
-    // Refresh data whenever tab/phone screen becomes visible
+    // 1. BroadcastChannel for instant cross-tab / cross-window sync (< 5ms)
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        this.broadcastChannel = new BroadcastChannel('jeevanpranav_sync_channel');
+        this.broadcastChannel.onmessage = (event) => {
+          if (event.data && event.data.type === 'STATE_CHANGED') {
+            this.loadLocalCache();
+            this.notify();
+          } else if (event.data && event.data.type === 'DSA_UPDATE') {
+            const p = event.data.problem;
+            if (p) {
+              const idx = this.dsaProblems.findIndex(item => item.id === p.id || item.lcNumber === p.lcNumber);
+              if (idx !== -1) {
+                this.dsaProblems[idx] = { ...this.dsaProblems[idx], ...p };
+                this.persistLocalCache();
+                this.notify();
+              }
+            }
+          } else if (event.data && event.data.type === 'AI_UPDATE') {
+            const d = event.data.day;
+            if (d) {
+              const idx = this.days.findIndex(item => item.day === d.day);
+              if (idx !== -1) {
+                this.days[idx] = { ...this.days[idx], ...d };
+                this.persistLocalCache();
+                this.notify();
+              }
+            }
+          }
+        };
+      }
+    } catch (e) {
+      console.warn("BroadcastChannel note:", e.message);
+    }
+
+    // 2. Cross-tab LocalStorage synchronization
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_KEY_DSA_CACHE || e.key === STORAGE_KEY_AI_CACHE) {
+        this.loadLocalCache();
+        this.notify();
+      }
+    });
+
+    // 3. Tab visibility change & window focus
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         this.fetchFromDatabase();
@@ -279,6 +582,23 @@ class StorageService {
     window.addEventListener('focus', () => {
       this.fetchFromDatabase();
     });
+
+    // 4. Background cloud sync heartbeat (every 10s when active)
+    if (!this.heartbeatInterval) {
+      this.heartbeatInterval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          this.fetchFromDatabase();
+        }
+      }, 10000);
+    }
+  }
+
+  broadcastChange(msg) {
+    try {
+      if (this.broadcastChannel) {
+        this.broadcastChannel.postMessage(msg);
+      }
+    } catch (e) {}
   }
 
   subscribe(listener) {
@@ -318,36 +638,44 @@ class StorageService {
     const idx = this.dsaProblems.findIndex(p => p.id === id || p.lcNumber === id);
     if (idx === -1) return null;
 
-    const previousState = { ...this.dsaProblems[idx] };
     const problemId = this.dsaProblems[idx].id;
 
-    // 1. Optimistic Update
-    this.dsaProblems[idx] = {
+    // 1. Optimistic Update with Fresh Array Reference for React reactivity
+    const updatedProblem = {
       ...this.dsaProblems[idx],
       ...updates,
       updatedAt: new Date().toISOString()
     };
+    const nextProblems = [...this.dsaProblems];
+    nextProblems[idx] = updatedProblem;
+    this.dsaProblems = nextProblems;
+
+    this.persistLocalCache();
+    this.broadcastChange({ type: 'DSA_UPDATE', problem: updatedProblem });
+    this.persistFastCloudSync();
     this.syncState = 'syncing';
     this.notify();
 
-    // 2. Persist to Supabase
+    // 2. Persist to Supabase Cloud Database
     const userId = authService.getUserId();
-    const result = await DsaService.updateProblemProgress(userId, problemId, updates);
-
-    if (result.success) {
-      this.syncState = 'synced';
-      this.lastSyncedAt = new Date().toISOString();
-      this.lastError = null;
-      if (updates.status === 'DONE') {
-        ActivityService.recordActivity(userId, { dsaCompleted: 1 });
+    try {
+      const result = await DsaService.updateProblemProgress(userId, problemId, updates);
+      if (result.success) {
+        this.syncState = 'synced';
+        this.lastSyncedAt = new Date().toISOString();
+        this.lastError = null;
+        if (updates.status === 'DONE') {
+          ActivityService.recordActivity(userId, { dsaCompleted: 1 });
+        }
+      } else {
+        console.warn("Supabase DSA write note (stored locally & fast cloud sync):", result.error);
+        this.syncState = 'offline';
       }
-    } else {
-      // Rollback on failure
-      console.error("Failed to save DSA update, rolling back:", result.error);
-      this.dsaProblems[idx] = previousState;
-      this.syncState = 'error';
-      this.lastError = result.error || "Failed to save to cloud database.";
+    } catch (err) {
+      console.warn("Supabase network note (stored locally & fast cloud sync):", err.message);
+      this.syncState = 'offline';
     }
+
     this.notify();
     return this.dsaProblems[idx];
   }
@@ -406,6 +734,9 @@ class StorageService {
     if (idx === -1) return;
 
     this.dsaAlreadySolved[idx] = { ...this.dsaAlreadySolved[idx], ...updates };
+    this.persistLocalCache();
+    this.broadcastChange({ type: 'DSA_ALREADY_SOLVED_UPDATE', item: this.dsaAlreadySolved[idx] });
+    this.persistFastCloudSync();
     this.notify();
 
     const userId = authService.getUserId();
@@ -482,8 +813,8 @@ class StorageService {
     };
   }
 
-  getDsaTodayProblems() {
-    const target = this.dsaSettings.dailyTarget || 3;
+  getDsaTodayProblems(limit) {
+    const target = (typeof limit === 'number' && limit > 0) ? limit : (this.dsaSettings.dailyTarget || 3);
     const pending = this.dsaProblems.filter(p => p.status === 'NOT_STARTED' || p.status === 'IN_PROGRESS');
     return pending.slice(0, target);
   }
@@ -500,34 +831,42 @@ class StorageService {
     const idx = this.days.findIndex(d => d.day === dayNum);
     if (idx === -1) return null;
 
-    const previousState = { ...this.days[idx] };
-
-    // 1. Optimistic Update
-    this.days[idx] = {
+    // 1. Optimistic Update with Fresh Array Reference for React reactivity
+    const updatedDay = {
       ...this.days[idx],
       ...updates,
       updatedAt: new Date().toISOString()
     };
+    const nextDays = [...this.days];
+    nextDays[idx] = updatedDay;
+    this.days = nextDays;
+
+    this.persistLocalCache();
+    this.broadcastChange({ type: 'AI_UPDATE', day: updatedDay });
+    this.persistFastCloudSync();
     this.syncState = 'syncing';
     this.notify();
 
-    // 2. Persist to Supabase
+    // 2. Persist to Supabase Cloud Database
     const userId = authService.getUserId();
-    const result = await AiService.updateDayProgress(userId, dayNum, updates);
-
-    if (result.success) {
-      this.syncState = 'synced';
-      this.lastSyncedAt = new Date().toISOString();
-      this.lastError = null;
-      if (updates.status === 'COMPLETED') {
-        ActivityService.recordActivity(userId, { aiCompleted: 1 });
+    try {
+      const result = await AiService.updateDayProgress(userId, dayNum, updates);
+      if (result.success) {
+        this.syncState = 'synced';
+        this.lastSyncedAt = new Date().toISOString();
+        this.lastError = null;
+        if (updates.status === 'COMPLETED') {
+          ActivityService.recordActivity(userId, { aiCompleted: 1 });
+        }
+      } else {
+        console.warn("Supabase AI write note (stored locally & fast cloud sync):", result.error);
+        this.syncState = 'offline';
       }
-    } else {
-      console.error("Failed to save AI day update, rolling back:", result.error);
-      this.days[idx] = previousState;
-      this.syncState = 'error';
-      this.lastError = result.error || "Failed to save to cloud database.";
+    } catch (err) {
+      console.warn("Supabase network note (stored locally & fast cloud sync):", err.message);
+      this.syncState = 'offline';
     }
+
     this.notify();
     return this.days[idx];
   }
@@ -575,6 +914,9 @@ class StorageService {
 
     const doubts = day.doubts || [];
     day.doubts = [newDoubt, ...doubts];
+    this.persistLocalCache();
+    this.broadcastChange({ type: 'AI_UPDATE', day });
+    this.persistFastCloudSync();
     this.notify();
 
     const result = await AiService.addDoubt(userId, {
@@ -586,6 +928,8 @@ class StorageService {
 
     if (result.success && result.doubt) {
       newDoubt.id = result.doubt.id;
+      this.persistLocalCache();
+      this.persistFastCloudSync();
       ActivityService.recordActivity(userId, { doubts: 1 });
     }
     return newDoubt;
@@ -603,6 +947,9 @@ class StorageService {
         explanation: (explanation || '').trim(),
         verifiedAt: new Date().toISOString()
       };
+      this.persistLocalCache();
+      this.broadcastChange({ type: 'AI_UPDATE', day });
+      this.persistFastCloudSync();
       this.notify();
     }
 
@@ -616,6 +963,9 @@ class StorageService {
     if (!day || !day.doubts) return false;
 
     day.doubts = day.doubts.filter(d => d.id !== doubtId);
+    this.persistLocalCache();
+    this.broadcastChange({ type: 'AI_UPDATE', day });
+    this.persistFastCloudSync();
     this.notify();
 
     const userId = authService.getUserId();
@@ -646,15 +996,28 @@ class StorageService {
   getDashboardStats() {
     const totalDays = this.days.length || 365;
     const completedDays = this.days.filter(d => d.status === 'COMPLETED').length;
-    const progressPercentage = Math.round((completedDays / totalDays) * 100);
+    const inProgressDays = this.days.filter(d => d.status === 'IN_PROGRESS').length;
+    const progressPercentage = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
 
     let unresolvedDoubtsCount = 0;
     let resolvedDoubtsCount = 0;
     let totalMinutes = 0;
 
     const activityDates = [];
+    const phaseStats = {};
+    const weakAreas = [];
 
     this.days.forEach(d => {
+      // Phase Stats
+      const phase = d.phase || 'Phase 0 - Setup';
+      if (!phaseStats[phase]) {
+        phaseStats[phase] = { total: 0, completed: 0, needsRevision: 0 };
+      }
+      phaseStats[phase].total++;
+      if (d.status === 'COMPLETED') phaseStats[phase].completed++;
+      if (d.status === 'NEEDS_REVISION') phaseStats[phase].needsRevision++;
+
+      // Doubts & time
       if (d.doubts && Array.isArray(d.doubts)) {
         d.doubts.forEach(doubt => {
           if (doubt.status === 'RESOLVED') resolvedDoubtsCount++;
@@ -665,7 +1028,35 @@ class StorageService {
       if (d.completedAt) {
         activityDates.push(d.completedAt.split('T')[0]);
       }
+
+      // Weak areas calculation:
+      // Severity based on unresolved doubts, mastery <= 2, or NEEDS_REVISION
+      const reasons = [];
+      let severity = 0;
+      const dayDoubts = (d.doubts || []).filter(doubt => doubt.status !== 'RESOLVED');
+      if (dayDoubts.length > 0) {
+        severity += dayDoubts.length * 2;
+        reasons.push(`${dayDoubts.length} open doubt${dayDoubts.length > 1 ? 's' : ''}`);
+      }
+      if (d.mastery && d.mastery > 0 && d.mastery <= 2) {
+        severity += (3 - d.mastery) * 2;
+        reasons.push(`Low mastery (${d.mastery}/5)`);
+      }
+      if (d.status === 'NEEDS_REVISION') {
+        severity += 2;
+        reasons.push('Marked for revision');
+      }
+      if (severity > 0) {
+        weakAreas.push({
+          dayNum: d.day,
+          topic: d.topic || `Day ${d.day}`,
+          severityScore: severity,
+          reasons
+        });
+      }
     });
+
+    weakAreas.sort((a, b) => b.severityScore - a.severityScore);
 
     this.dsaProblems.forEach(p => {
       if (p.dateSolved) activityDates.push(p.dateSolved);
@@ -682,20 +1073,102 @@ class StorageService {
     return {
       progressPercentage,
       completedDays,
+      inProgressDays,
       totalDays,
       unresolvedDoubtsCount,
       resolvedDoubtsCount,
       doubtResolutionRate,
       revisionDueCount,
       totalHours: (totalMinutes / 60).toFixed(1),
-      streak
+      streak,
+      phaseStats,
+      weakAreas
     };
   }
 
   getTodayDay() {
     // Determine active day by first non-completed day or Day 1
     const active = this.days.find(d => d.status !== 'COMPLETED');
-    return active || this.days[0];
+    if (active) return active;
+    if (this.days.length > 0) return this.days[0];
+    return {
+      day: 1,
+      date: ActivityService.getTodayDateString(),
+      week: 1,
+      phase: "Phase 0 - Assessment & Setup",
+      topic: "Environment + Repository Setup & Testing Baseline",
+      concepts: "uv, pyproject.toml, pytest, ruff, git hooks",
+      learnSection: "LEARN (45 min) - uv docs, pytest fixtures",
+      sourceKey: "OWN",
+      sourceName: "Python Packaging & Testing",
+      sourceUrl: "https://docs.astral.sh/uv/",
+      whatToStudy: "Study pyproject.toml configuration, pytest fixture scopes, virtual environment management.",
+      whatToSkip: "Complex legacy setuptools packaging.",
+      quality: "PRIMARY",
+      implementTask: "Initialize ai-lab repository, configure pytest test runner and pre-commit hooks.",
+      reviseTask: "Review virtual env commands.",
+      deliverable: "Repo with green test suite",
+      difficulty: 1,
+      status: "NOT_STARTED",
+      mastery: 0,
+      timeSpentMinutes: 0,
+      remarks: "",
+      notes: "",
+      doubts: []
+    };
+  }
+
+  async pushCloudSync() {
+    this.syncState = 'syncing';
+    this.notify();
+    const userId = authService.getUserId();
+    try {
+      // 1. Push non-default DSA problem progress
+      for (const p of this.dsaProblems) {
+        if (p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0 || p.approach || p.code) {
+          await DsaService.updateProblemProgress(userId, p.id, {
+            status: p.status,
+            dateSolved: p.dateSolved,
+            attempts: p.attempts,
+            notes: p.notes,
+            mistakes: p.mistakes,
+            mastery: p.mastery,
+            approach: p.approach,
+            code: p.code,
+            codeLang: p.codeLang,
+            timeComplexity: p.timeComplexity,
+            spaceComplexity: p.spaceComplexity,
+            explanation: p.explanation,
+            nextRevisionDate: p.nextRevisionDate
+          });
+        }
+      }
+      // 2. Push non-default AI days progress
+      for (const d of this.days) {
+        if (d.status !== 'NOT_STARTED' || d.remarks || d.notes || d.mastery > 0) {
+          await AiService.updateDayProgress(userId, d.day, {
+            status: d.status,
+            remarks: d.remarks,
+            notes: d.notes,
+            mastery: d.mastery,
+            timeSpentMinutes: d.timeSpentMinutes,
+            completedAt: d.completedAt,
+            nextRevisionDate: d.nextRevisionDate
+          });
+        }
+      }
+      this.syncState = 'synced';
+      this.lastSyncedAt = new Date().toISOString();
+      this.lastError = null;
+    } catch (e) {
+      this.syncState = 'offline';
+      this.lastError = e.message;
+    }
+    this.notify();
+  }
+
+  async pullCloudSync() {
+    await this.fetchFromDatabase();
   }
 
   saveSettings(newSettings) {

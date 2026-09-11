@@ -9,16 +9,17 @@ export class ActivityService {
    */
   static getTodayDateString(offsetDays = 0) {
     const now = new Date();
-    if (offsetDays !== 0) {
-      now.setDate(now.getDate() + offsetDays);
-    }
+    const targetDate = offsetDays === 0
+      ? now
+      : new Date(now.getTime() + (offsetDays * 24 * 60 * 60 * 1000));
+
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: TIMEZONE,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
     });
-    return formatter.format(now);
+    return formatter.format(targetDate);
   }
 
   /**
@@ -44,7 +45,7 @@ export class ActivityService {
 
     const uniqueDates = Array.from(new Set(activityDates))
       .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a)); // Descending
+      .sort((a, b) => b.localeCompare(a)); // Descending YYYY-MM-DD
 
     if (uniqueDates.length === 0) return 0;
 
@@ -63,9 +64,9 @@ export class ActivityService {
     for (let i = 0; i < uniqueDates.length; i++) {
       if (uniqueDates[i] === expectedDate) {
         streak++;
-        // Compute previous day string
-        const prev = new Date(expectedDate);
-        prev.setDate(prev.getDate() - 1);
+        // Compute previous day string in UTC to avoid any DST or timezone jitter
+        const prev = new Date(expectedDate + 'T12:00:00Z');
+        prev.setUTCDate(prev.getUTCDate() - 1);
         expectedDate = prev.toISOString().split('T')[0];
       } else {
         break;

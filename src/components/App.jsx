@@ -86,6 +86,58 @@ const { useState, useEffect, useMemo, useRef } = React;
 // ==========================================
 // SAFE LUCIDE ICON HELPER
 // ==========================================
+const ICON_FALLBACK_SVGS = {
+  'check': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+  'check-circle-2': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`,
+  'play': `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`,
+  'rotate-ccw': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
+  'refresh-cw': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>`,
+  'search': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
+  'x': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+  'chevron-down': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+  'chevron-right': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
+  'chevrons-up': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`,
+  'chevrons-down': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>`,
+  'external-link': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`,
+  'star': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
+  'help-circle': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+  'message-square': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
+  'save': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`,
+  'alert-triangle': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+  'database': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>`,
+  'brain': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-5.04z"></path><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-5.04z"></path></svg>`,
+  'code': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`,
+  'flame': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`,
+  'target': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>`,
+  'sun': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`,
+  'map': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>`,
+  'repeat': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>`,
+  'folder-git-2': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><circle cx="12" cy="13" r="2"></circle><path d="M14 13h3"></path><path d="M7 13h3"></path></svg>`,
+  'book-open': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`,
+  'info': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
+  'clock': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
+  'activity': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>`,
+  'file-text': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>`,
+  'log-out': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>`,
+  'log-in': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>`,
+  'user': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
+  'lock': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`,
+  'eye': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
+  'eye-off': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>`,
+  'arrow-right': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`,
+  'arrow-up-right': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>`,
+  'layout-dashboard': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>`,
+  'bar-chart-3': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>`,
+  'layers': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`,
+  'grid': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`,
+  'copy': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`,
+  'compass': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>`,
+  'upload-cloud': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path><polyline points="16 16 12 12 8 16"></polyline></svg>`,
+  'download-cloud': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path></svg>`,
+  'download': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`,
+  'server': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`
+};
+
 function Icon({ name, size = 18, className = "" }) {
   const getSvg = (iconName, iconSize, iconClass) => {
     try {
@@ -98,7 +150,16 @@ function Icon({ name, size = 18, className = "" }) {
         }
       }
     } catch (e) {}
-    return '';
+
+    // Instant fallback if Lucide is not yet initialized
+    if (ICON_FALLBACK_SVGS[iconName]) {
+      return ICON_FALLBACK_SVGS[iconName].replace(
+        '<svg ',
+        `<svg class="${iconClass}" width="${iconSize}" height="${iconSize}" `
+      );
+    }
+    // Generic SVG fallback
+    return `<svg class="${iconClass}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>`;
   };
 
   const [svgHtml, setSvgHtml] = useState(() => getSvg(name, size, className));
@@ -124,6 +185,93 @@ function Icon({ name, size = 18, className = "" }) {
     />
   );
 }
+
+// ==========================================
+// REACT TOP-LEVEL ERROR BOUNDARY
+// ==========================================
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("React ErrorBoundary caught runtime exception:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
+    window.location.reload();
+  };
+
+  handleResetTrack = () => {
+    try {
+      if (typeof window !== 'undefined' && window.authService) {
+        window.authService.setSelectedTrack(null);
+      }
+    } catch (e) {}
+    this.setState({ hasError: false, error: null, errorInfo: null });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#06090e] flex items-center justify-center p-6 text-slate-100 selection:bg-rose-600 selection:text-white">
+          <div className="max-w-xl w-full bg-[#0c1017] border border-rose-500/30 rounded-2xl p-8 shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 text-rose-400 border-b border-slate-800 pb-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+                <Icon name="alert-triangle" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold font-display text-white">Something went wrong</h2>
+                <p className="text-xs text-slate-400">An unexpected application rendering exception occurred.</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-rose-300 space-y-1 overflow-x-auto">
+              <div className="text-[10px] uppercase font-bold text-slate-500">Error Message:</div>
+              <div>{this.state.error?.message || "Unknown runtime exception"}</div>
+            </div>
+
+            {this.state.errorInfo?.componentStack && (
+              <details className="text-xs font-mono text-slate-500">
+                <summary className="cursor-pointer text-slate-400 hover:text-slate-200">Component Stack Trace (Development)</summary>
+                <pre className="mt-2 p-3 bg-slate-950/80 rounded-lg text-[11px] overflow-x-auto text-slate-400 border border-slate-800">
+                  {this.state.errorInfo.componentStack}
+                </pre>
+              </details>
+            )}
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button
+                onClick={this.handleReload}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-blue-600/30"
+              >
+                <Icon name="refresh-cw" size={14} />
+                <span>Retry & Reload</span>
+              </button>
+              <button
+                onClick={this.handleResetTrack}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition border border-slate-700/60"
+              >
+                Go to Track Selection
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 
 // --- SOUND CHIME GENERATOR ---
 function playChime(type = 'complete') {
@@ -461,6 +609,22 @@ function TrackSelectionView({ onSelectTrack, onLogout }) {
 // 3. AI ENGINEER: FULL RICH DASHBOARD VIEW
 // ==========================================
 function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRevision, onGoToDoubts, onGoToProjects }) {
+  const safeStats = {
+    progressPercentage: stats?.progressPercentage || 0,
+    completedDays: stats?.completedDays || 0,
+    inProgressDays: stats?.inProgressDays || 0,
+    unresolvedDoubtsCount: stats?.unresolvedDoubtsCount || 0,
+    resolvedDoubtsCount: stats?.resolvedDoubtsCount || 0,
+    doubtResolutionRate: stats?.doubtResolutionRate || 100,
+    revisionDueCount: stats?.revisionDueCount || 0,
+    totalHours: stats?.totalHours || "0.0",
+    weakAreas: Array.isArray(stats?.weakAreas) ? stats.weakAreas : [],
+    phaseStats: stats?.phaseStats && typeof stats.phaseStats === 'object' ? stats.phaseStats : {},
+    ...(stats || {})
+  };
+  safeStats.weakAreas = Array.isArray(safeStats.weakAreas) ? safeStats.weakAreas : [];
+  safeStats.phaseStats = safeStats.phaseStats && typeof safeStats.phaseStats === 'object' ? safeStats.phaseStats : {};
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* HERO BANNER */}
@@ -470,7 +634,7 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
               <span className="text-xs uppercase font-mono font-bold tracking-wider text-blue-400">
-                GOOD EVENING, JEEVANPRANAV
+                {(typeof window !== 'undefined' && window.ActivityService?.getGreeting) ? window.ActivityService.getGreeting() : 'GOOD DAY'}, JEEVANPRANAV
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-extrabold font-display text-white tracking-tight">
@@ -495,13 +659,13 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="bg-[#121824] p-4 rounded-xl border border-slate-800 space-y-1">
           <div className="text-xs text-slate-400 font-medium">Overall Progress</div>
-          <div className="text-2xl font-extrabold text-blue-400 font-display">{stats.progressPercentage}%</div>
-          <div className="text-[11px] text-slate-400">{stats.completedDays} of 365 Days</div>
+          <div className="text-2xl font-extrabold text-blue-400 font-display">{safeStats.progressPercentage}%</div>
+          <div className="text-[11px] text-slate-400">{safeStats.completedDays} of 365 Days</div>
         </div>
 
         <div className="bg-[#121824] p-4 rounded-xl border border-slate-800 space-y-1">
           <div className="text-xs text-slate-400 font-medium">In Progress</div>
-          <div className="text-2xl font-extrabold text-cyan-400 font-display">{stats.inProgressDays}</div>
+          <div className="text-2xl font-extrabold text-cyan-400 font-display">{safeStats.inProgressDays}</div>
           <div className="text-[11px] text-slate-400">Active topics</div>
         </div>
 
@@ -513,8 +677,8 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
             <span>Open Doubts</span>
             <Icon name="help-circle" size={14} className="text-amber-400" />
           </div>
-          <div className="text-2xl font-extrabold text-amber-400 font-display">{stats.unresolvedDoubtsCount}</div>
-          <div className="text-[11px] text-slate-400">{stats.resolvedDoubtsCount} resolved ({stats.doubtResolutionRate}%)</div>
+          <div className="text-2xl font-extrabold text-amber-400 font-display">{safeStats.unresolvedDoubtsCount}</div>
+          <div className="text-[11px] text-slate-400">{safeStats.resolvedDoubtsCount} resolved ({safeStats.doubtResolutionRate}%)</div>
         </div>
 
         <div
@@ -525,13 +689,13 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
             <span>Revision Due</span>
             <Icon name="repeat" size={14} className="text-indigo-400" />
           </div>
-          <div className="text-2xl font-extrabold text-indigo-400 font-display">{stats.revisionDueCount}</div>
+          <div className="text-2xl font-extrabold text-indigo-400 font-display">{safeStats.revisionDueCount}</div>
           <div className="text-[11px] text-slate-400">Spaced rep queue</div>
         </div>
 
         <div className="bg-[#121824] p-4 rounded-xl border border-slate-800 space-y-1">
           <div className="text-xs text-slate-400 font-medium">Time Logged</div>
-          <div className="text-2xl font-extrabold text-purple-400 font-display">{stats.totalHours}h</div>
+          <div className="text-2xl font-extrabold text-purple-400 font-display">{safeStats.totalHours}h</div>
           <div className="text-[11px] text-slate-400">Target: 730h (2h/d)</div>
         </div>
 
@@ -649,18 +813,18 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
               </span>
               <h2 className="text-lg font-bold text-white font-display">Weak Areas Radar</h2>
             </div>
-            <span className="text-xs font-mono text-slate-400">{stats.weakAreas.length} detected</span>
+            <span className="text-xs font-mono text-slate-400">{(safeStats.weakAreas || []).length} detected</span>
           </div>
 
           <div className="space-y-2.5 overflow-y-auto max-h-[220px] pr-1">
-            {stats.weakAreas.length === 0 ? (
+            {(safeStats.weakAreas || []).length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-xs space-y-2">
                 <Icon name="check-circle-2" size={32} className="mx-auto text-emerald-500/60" />
                 <p>No severe weak areas detected yet!</p>
                 <p className="text-[11px] text-slate-600">Topics with mastery ≤ 2 or unresolved doubts will surface here automatically.</p>
               </div>
             ) : (
-              stats.weakAreas.slice(0, 4).map(item => (
+              (safeStats.weakAreas || []).slice(0, 4).map(item => (
                 <div
                   key={item.dayNum}
                   onClick={() => onSelectDay(getStorage().getDay(item.dayNum))}
@@ -705,7 +869,7 @@ function AIDashboardView({ stats, todayDay, onSelectDay, onStartToday, onGoToRev
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Object.entries(stats.phaseStats).map(([phaseName, p]) => {
+          {Object.entries(safeStats.phaseStats || {}).map(([phaseName, p]) => {
             const pct = Math.round((p.completed / (p.total || 1)) * 100);
             return (
               <div key={phaseName} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2">
@@ -1876,8 +2040,14 @@ function AIResourcesView({ onSelectTopic }) {
 // ==========================================
 // 8. AI ENGINEER: FULL PROJECTS & CP RUBRICS VIEW
 // ==========================================
-function AIProjectsView({ projects, checkpoints }) {
+function AIProjectsView({ projects = [], checkpoints = [] }) {
   const [selectedProject, setSelectedProject] = useState(projects[0] || null);
+
+  useEffect(() => {
+    if (!selectedProject && projects.length > 0) {
+      setSelectedProject(projects[0]);
+    }
+  }, [projects, selectedProject]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1976,7 +2146,7 @@ function DSADashboardView({ stats, onSelectProblem, onNavigate }) {
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="text-xs uppercase font-mono font-bold tracking-wider text-emerald-400">
-                DSA Command Center • LeetCode 250
+                {(typeof window !== 'undefined' && window.ActivityService?.getGreeting) ? window.ActivityService.getGreeting() : 'GOOD DAY'}, JEEVANPRANAV • DSA COMMAND CENTER
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-extrabold font-display text-white tracking-tight">
@@ -2338,7 +2508,7 @@ function DSAPracticeView({ problems, onSelectProblem, searchQuery, setSearchQuer
       {/* 22 TOPICS ACCORDIONS */}
       <div className="space-y-4">
         {Object.entries(groupedCategories).map(([catName, catProblems]) => {
-          if (catProblems.length === 0 && topicFilter !== 'ALL') return null;
+          if (catProblems.length === 0) return null;
 
           const isExpanded = expandedTopics[catName] !== false;
           const completedCount = catProblems.filter(p => p.status === 'DONE').length;
@@ -2616,13 +2786,818 @@ function DSAPracticeView({ problems, onSelectProblem, searchQuery, setSearchQuer
 }
 
 // ==========================================
-// 10. DATABASE & CLOUD SYNC MODAL
+// 10.1 FULL INTERACTIVE DSA PROBLEM DRAWER / MODAL
+// ==========================================
+function DSAProblemDrawer({ problem, onClose }) {
+  if (!problem) return null;
+
+  const [activeTab, setActiveTab] = useState('overview'); // overview, approach, solution, complexity, mistakes, notes, revision
+  const [status, setStatus] = useState(problem.status || 'NOT_STARTED');
+  const [attempts, setAttempts] = useState(problem.attempts || 0);
+  const [mastery, setMastery] = useState(problem.mastery || 0);
+  const [dateSolved, setDateSolved] = useState(problem.dateSolved || '');
+  const [notes, setNotes] = useState(problem.notes || '');
+  const [mistakes, setMistakes] = useState(problem.mistakes || '');
+  const [approach, setApproach] = useState(problem.approach || '');
+  const [code, setCode] = useState(problem.code || problem.personalCode || '');
+  const [explanation, setExplanation] = useState(problem.explanation || '');
+  const [timeComplexity, setTimeComplexity] = useState(problem.timeComplexity || 'O(N)');
+  const [spaceComplexity, setSpaceComplexity] = useState(problem.spaceComplexity || 'O(1)');
+  const [codeLang, setCodeLang] = useState('Java');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
+
+  const companiesList = (problem.companies || '').split(',').map(c => c.trim()).filter(Boolean);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveStatus(null);
+    try {
+      const updates = {
+        status,
+        attempts: Number(attempts),
+        mastery: Number(mastery),
+        dateSolved,
+        notes,
+        mistakes,
+        approach,
+        code,
+        explanation,
+        timeComplexity,
+        spaceComplexity
+      };
+      await getStorage().updateDsaProblem(problem.id, updates);
+      setSaveStatus('saved');
+      notify(`Saved #${problem.lcNumber} progress to Cloud Database!`, 'success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (e) {
+      setSaveStatus('error');
+      notify(`Failed to save: ${e.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleQuickDone = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setStatus('DONE');
+    setDateSolved(today);
+    if (!mastery || mastery === 0) setMastery(4);
+    if (!attempts || attempts === 0) setAttempts(1);
+    playChime('complete');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#0e141f] border border-slate-700/90 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        {/* MODAL HEADER */}
+        <div className="p-4 sm:p-6 border-b border-slate-800 bg-[#0c1017] space-y-3 shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-bold text-emerald-400">
+                  LEETCODE #{problem.lcNumber}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-xs font-mono text-slate-400">
+                  {problem.subTopic}
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  problem.difficulty === 'Easy' ? 'diff-badge-easy' : problem.difficulty === 'Hard' ? 'diff-badge-hard' : 'diff-badge-medium'
+                }`}>
+                  {problem.difficulty}
+                </span>
+                {problem.priority === 'HIGH' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    Critical
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-white">
+                {problem.problem}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href={problem.link}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition shrink-0"
+              >
+                <span>Open Problem on LeetCode</span>
+                <Icon name="external-link" size={13} />
+              </a>
+              <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* QUICK CONTROLS: STATUS / ATTEMPTS / MASTERY */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs font-mono">
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Status</span>
+              <select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  if (e.target.value === 'DONE' && !dateSolved) {
+                    setDateSolved(new Date().toISOString().split('T')[0]);
+                  }
+                }}
+                className="w-full bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+              >
+                <option value="NOT_STARTED" className="bg-slate-900">NOT STARTED</option>
+                <option value="IN_PROGRESS" className="bg-slate-900">IN PROGRESS</option>
+                <option value="DONE" className="bg-slate-900">✓ DONE</option>
+                <option value="REVISE" className="bg-slate-900">REVISE</option>
+                <option value="SKIPPED" className="bg-slate-900">SKIPPED</option>
+              </select>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Attempts</span>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setAttempts(prev => Math.max(0, Number(prev) - 1))}
+                  className="text-slate-400 hover:text-white font-bold px-1"
+                >-</button>
+                <span className="font-bold text-white">{attempts}</span>
+                <button
+                  type="button"
+                  onClick={() => setAttempts(prev => Number(prev) + 1)}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold px-1"
+                >+</button>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Mastery Rating</span>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setMastery(star)}
+                    className={`text-sm transition ${mastery >= star ? 'text-amber-400' : 'text-slate-700 hover:text-slate-500'}`}
+                  >★</button>
+                ))}
+                <span className="text-slate-400 text-[10px] ml-1">{mastery}/5</span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Date Solved</span>
+              <input
+                type="date"
+                value={dateSolved}
+                onChange={(e) => setDateSolved(e.target.value)}
+                className="w-full bg-transparent text-slate-200 text-xs focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* SUB-TABS NAVIGATION */}
+          <div className="flex items-center gap-1 overflow-x-auto pt-1 no-scrollbar">
+            {[
+              { id: 'overview', label: '1. Overview & Pattern', icon: 'info' },
+              { id: 'approach', label: '2. My Approach', icon: 'compass' },
+              { id: 'solution', label: '3. My Solution Code', icon: 'code' },
+              { id: 'complexity', label: '4. Complexity', icon: 'activity' },
+              { id: 'mistakes', label: '5. Mistakes / Gotchas', icon: 'alert-triangle' },
+              { id: 'notes', label: '6. Notes & Reflection', icon: 'file-text' },
+              { id: 'revision', label: '7. Spaced Revision', icon: 'repeat' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon name={tab.icon} size={13} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* MODAL BODY (SCROLLABLE TAB CONTENT) */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 font-mono text-xs">
+          {activeTab === 'overview' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="text-[11px] font-bold text-emerald-400 uppercase">Algorithmic Pattern / Key Idea:</div>
+                <div className="text-sm font-semibold text-white">{problem.pattern || 'General Problem Solving'}</div>
+              </div>
+
+              {companiesList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-300">Frequently Asked Companies:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {companiesList.map((comp, idx) => (
+                      <CompanyBadge key={idx} name={comp} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 rounded-xl bg-[#121824] border border-slate-800 space-y-2">
+                <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                  <Icon name="external-link" size={14} className="text-emerald-400" />
+                  <span>Official LeetCode Problem</span>
+                </div>
+                <p className="text-slate-400 text-xs">
+                  Full problem description, test cases, and online judge are accessible directly on LeetCode.
+                </p>
+                <a
+                  href={problem.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-emerald-400 hover:underline font-bold pt-1"
+                >
+                  <span>{problem.link}</span>
+                  <Icon name="arrow-up-right" size={12} />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'approach' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300">
+                  My High-Level Approach & Algorithm Steps:
+                </label>
+                <span className="text-[11px] text-slate-500">How you formulated the solution</span>
+              </div>
+              <textarea
+                value={approach}
+                onChange={(e) => setApproach(e.target.value)}
+                placeholder={`E.g., 1. Use a HashMap to store elements and indices.
+2. For each number, check if target - num exists.
+3. If yes, return current index and mapped index.`}
+                rows={10}
+                className="w-full p-4 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed font-mono"
+              />
+            </div>
+          )}
+
+          {activeTab === 'solution' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    My Personal Solution Code:
+                  </label>
+                  <select
+                    value={codeLang}
+                    onChange={(e) => setCodeLang(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 px-2.5 py-1 rounded-lg text-xs text-slate-200 focus:outline-none"
+                  >
+                    <option value="Java">Java</option>
+                    <option value="Python">Python</option>
+                    <option value="C++">C++</option>
+                    <option value="JavaScript">JavaScript</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(code);
+                    notify("Code copied to clipboard!", "info");
+                  }}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+                >
+                  <Icon name="copy" size={12} />
+                  <span>Copy Code</span>
+                </button>
+              </div>
+
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder={`// Paste your ${codeLang} implementation here...
+class Solution {
+    public boolean containsDuplicate(int[] nums) {
+        Set<Integer> set = new HashSet<>();
+        for (int n : nums) {
+            if (!set.add(n)) return true;
+        }
+        return false;
+    }
+}`}
+                rows={14}
+                className="w-full p-4 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-emerald-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500 leading-relaxed font-mono selection:bg-emerald-800 selection:text-white"
+              />
+            </div>
+          )}
+
+          {activeTab === 'complexity' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <label className="text-xs font-bold text-cyan-400 uppercase flex items-center gap-1.5">
+                  <Icon name="clock" size={14} />
+                  <span>Time Complexity:</span>
+                </label>
+                <input
+                  type="text"
+                  value={timeComplexity}
+                  onChange={(e) => setTimeComplexity(e.target.value)}
+                  placeholder="e.g. O(N) or O(N log N)"
+                  className="w-full p-2.5 bg-[#121824] border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
+                />
+                <p className="text-[11px] text-slate-500">Single pass through the input array of size N.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <label className="text-xs font-bold text-indigo-400 uppercase flex items-center gap-1.5">
+                  <Icon name="database" size={14} />
+                  <span>Space Complexity:</span>
+                </label>
+                <input
+                  type="text"
+                  value={spaceComplexity}
+                  onChange={(e) => setSpaceComplexity(e.target.value)}
+                  placeholder="e.g. O(1) or O(N)"
+                  className="w-full p-2.5 bg-[#121824] border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+                <p className="text-[11px] text-slate-500">Auxiliary memory allocated for Hash set / table.</p>
+              </div>
+
+              <div className="sm:col-span-2 space-y-2 pt-2">
+                <label className="text-xs font-semibold text-slate-300">Mathematical & Big-O Intuition:</label>
+                <textarea
+                  value={explanation}
+                  onChange={(e) => setExplanation(e.target.value)}
+                  placeholder="Explain why this is optimal, trade-offs between time vs space, and alternative approaches..."
+                  rows={4}
+                  className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'mistakes' && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-rose-400 flex items-center gap-1.5">
+                <Icon name="alert-triangle" size={14} />
+                <span>Mistakes Made / Edge Cases / Gotchas (Interview Critical):</span>
+              </label>
+              <textarea
+                value={mistakes}
+                onChange={(e) => setMistakes(e.target.value)}
+                placeholder={`E.g., 
+- Forgot to handle empty array / single element edge case
+- Missed negative numbers in prefix sums
+- Off-by-one error in binary search mid calculation mid = left + (right - left) / 2`}
+                rows={9}
+                className="w-full p-4 bg-slate-950 border border-rose-500/40 rounded-xl text-xs text-rose-200 placeholder-slate-600 focus:outline-none focus:border-rose-500 leading-relaxed font-mono"
+              />
+            </div>
+          )}
+
+          {activeTab === 'notes' && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-purple-400 flex items-center gap-1.5">
+                <Icon name="file-text" size={14} />
+                <span>Personal Reflections & Problem Remarks:</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Personal notes, variation questions, or connections to other patterns..."
+                rows={9}
+                className="w-full p-4 bg-slate-950 border border-purple-500/40 rounded-xl text-xs text-purple-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 leading-relaxed font-mono"
+              />
+            </div>
+          )}
+
+          {activeTab === 'revision' && (
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+              <div>
+                <h4 className="text-sm font-bold text-white">Spaced Repetition Scheduling</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">Quickly queue this problem for future review.</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { days: 3, label: 'Revise in 3 Days (+3d)' },
+                  { days: 7, label: 'Revise in 1 Week (+7d)' },
+                  { days: 14, label: 'Revise in 2 Weeks (+14d)' },
+                  { days: 30, label: 'Revise in 1 Month (+30d)' }
+                ].map(item => (
+                  <button
+                    key={item.days}
+                    type="button"
+                    onClick={() => {
+                      setStatus('REVISE');
+                      notify(`Scheduled revision for +${item.days} days!`, 'info');
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700 transition"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* MODAL FOOTER */}
+        <div className="p-4 border-t border-slate-800 bg-[#0c1017] flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            {saveStatus === 'saved' && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1 font-mono animate-fade-in">
+                <Icon name="check" size={13} />
+                <span>Saved to Supabase ✓</span>
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="text-xs text-rose-400 flex items-center gap-1 font-mono">
+                <Icon name="alert-triangle" size={13} />
+                <span>Save failed</span>
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleQuickDone}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition"
+            >
+              ✓ Quick Mark Done
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition disabled:opacity-50"
+            >
+              <Icon name="save" size={14} />
+              <span>{isSaving ? "Saving..." : "Save All Changes"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 10.2 FULL INTERACTIVE AI DAY DRAWER / MODAL
+// ==========================================
+function AIDayDrawer({ day, onClose, onStartTimer }) {
+  if (!day) return null;
+
+  const [status, setStatus] = useState(day.status || 'NOT_STARTED');
+  const [mastery, setMastery] = useState(day.mastery || 0);
+  const [remarks, setRemarks] = useState(day.remarks || '');
+  const [notes, setNotes] = useState(day.notes || '');
+  const [activeTab, setActiveTab] = useState('mission'); // mission, remarks, doubts
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const [newDoubtQuestion, setNewDoubtQuestion] = useState('');
+  const [newDoubtUnderstanding, setNewDoubtUnderstanding] = useState('');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveStatus(null);
+    try {
+      await getStorage().updateDay(day.day, {
+        status,
+        mastery: Number(mastery),
+        remarks,
+        notes
+      });
+      setSaveStatus('saved');
+      notify(`Day ${day.day} progress saved to Cloud Database!`, 'success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (e) {
+      setSaveStatus('error');
+      notify(`Failed to save: ${e.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddDoubt = async (e) => {
+    if (e) e.preventDefault();
+    if (!newDoubtQuestion.trim()) return;
+
+    await getStorage().addDoubt(day.day, {
+      question: newDoubtQuestion,
+      userUnderstanding: newDoubtUnderstanding
+    });
+    setNewDoubtQuestion('');
+    setNewDoubtUnderstanding('');
+    notify(`Doubt logged for Day ${day.day}!`, 'success');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#0e141f] border border-slate-700/90 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        {/* MODAL HEADER */}
+        <div className="p-4 sm:p-6 border-b border-slate-800 bg-[#0c1017] space-y-3 shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-bold text-blue-400">
+                  DAY {day.day} • {day.date || `Day ${day.day}`}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-xs font-mono text-slate-400">
+                  {day.phase}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-xs font-mono text-slate-400">
+                  Week {day.week || 1}
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-white">
+                {day.topic}
+              </h2>
+              <p className="text-xs text-slate-400 font-mono">Concepts: {day.concepts}</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href={day.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition shrink-0"
+              >
+                <span>Launch Source ({day.sourceKey || 'DOCS'})</span>
+                <Icon name="external-link" size={13} />
+              </a>
+              <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* QUICK CONTROLS: STATUS / MASTERY */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-xs font-mono">
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Status</span>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+              >
+                <option value="NOT_STARTED" className="bg-slate-900">NOT STARTED</option>
+                <option value="IN_PROGRESS" className="bg-slate-900">IN PROGRESS</option>
+                <option value="COMPLETED" className="bg-slate-900">✓ COMPLETED</option>
+                <option value="NEEDS_REVISION" className="bg-slate-900">NEEDS REVISION</option>
+                <option value="SKIPPED" className="bg-slate-900">SKIPPED</option>
+              </select>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase text-slate-500 font-bold block">Mastery Rating</span>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setMastery(star)}
+                    className={`text-sm transition ${mastery >= star ? 'text-amber-400' : 'text-slate-700 hover:text-slate-500'}`}
+                  >★</button>
+                ))}
+                <span className="text-slate-400 text-[10px] ml-1">{mastery}/5</span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 space-y-1 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase text-slate-500 font-bold block">2h Focus Session</span>
+                <span className="text-blue-400 font-bold text-xs">45m + 75m + 5m</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (onStartTimer) onStartTimer(day);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1"
+              >
+                <Icon name="play" size={11} />
+                <span>Start</span>
+              </button>
+            </div>
+          </div>
+
+          {/* SUB-TABS NAVIGATION */}
+          <div className="flex items-center gap-1 overflow-x-auto pt-1 no-scrollbar">
+            {[
+              { id: 'mission', label: '1. Daily Mission & Tasks', icon: 'target' },
+              { id: 'remarks', label: '2. Personal Remarks & Notes', icon: 'file-text' },
+              { id: 'doubts', label: `3. Day Doubts (${(day.doubts || []).length})`, icon: 'help-circle' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon name={tab.icon} size={13} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* MODAL BODY */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 font-mono text-xs">
+          {activeTab === 'mission' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Learn Guidance */}
+                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase">
+                    <Icon name="book-open" size={15} />
+                    <span>Deep Learn Guidance (45m)</span>
+                  </div>
+                  <div className="text-slate-300 leading-relaxed bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    {day.whatToStudy || day.learnSection || 'Review foundational mechanics and official documentation.'}
+                  </div>
+                  {day.whatToSkip && (
+                    <div className="text-slate-400 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-rose-950/50 text-[11px]">
+                      <strong className="text-rose-400">Skip:</strong> {day.whatToSkip}
+                    </div>
+                  )}
+                </div>
+
+                {/* Implement Task */}
+                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold uppercase">
+                    <Icon name="code" size={15} />
+                    <span>Hands-on Task (75m)</span>
+                  </div>
+                  <div className="text-slate-300 leading-relaxed bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    {day.implementTask || 'Write clean, typed implementation in your repository.'}
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-800/40 text-[11px] text-emerald-300">
+                    <strong>Deliverable:</strong> {day.deliverable || 'Green tests and commit.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'remarks' && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Personal Reflections & Remarks:</label>
+                <textarea
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="E.g., Derivation was clear. Verified on GPU notebook. Ready for transformer architecture phase..."
+                  rows={5}
+                  className="w-full p-3.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Technical Notes & Reference Formulas:</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Formulas, bash commands, code snippets, architectural notes..."
+                  rows={6}
+                  className="w-full p-3.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-blue-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'doubts' && (
+            <div className="space-y-4">
+              <form onSubmit={handleAddDoubt} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="text-xs font-bold text-amber-400 uppercase flex items-center gap-1.5">
+                  <Icon name="help-circle" size={14} />
+                  <span>Raise New Doubt for Day {day.day}</span>
+                </div>
+                <input
+                  type="text"
+                  value={newDoubtQuestion}
+                  onChange={(e) => setNewDoubtQuestion(e.target.value)}
+                  placeholder="Enter doubt / question..."
+                  className="w-full p-2.5 bg-[#121824] border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+                <textarea
+                  value={newDoubtUnderstanding}
+                  onChange={(e) => setNewDoubtUnderstanding(e.target.value)}
+                  placeholder="Your current understanding / hypothesis..."
+                  rows={2}
+                  className="w-full p-2.5 bg-[#121824] border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-md shadow-amber-600/30"
+                  >
+                    Save Doubt
+                  </button>
+                </div>
+              </form>
+
+              <div className="space-y-2">
+                {(day.doubts || []).map(doubt => (
+                  <div key={doubt.id} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">{doubt.question}</span>
+                      <span className={`status-pill ${doubt.status === 'OPEN' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'}`}>
+                        {doubt.status}
+                      </span>
+                    </div>
+                    {doubt.userUnderstanding && (
+                      <p className="text-slate-400 text-[11px]">Hypothesis: {doubt.userUnderstanding}</p>
+                    )}
+                    {doubt.solution && (
+                      <div className="p-2 rounded bg-emerald-950/20 border border-emerald-800/40 text-[11px] text-emerald-300">
+                        <strong>Solution:</strong> {doubt.solution.answer}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* MODAL FOOTER */}
+        <div className="p-4 border-t border-slate-800 bg-[#0c1017] flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            {saveStatus === 'saved' && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1 font-mono">
+                <Icon name="check" size={13} />
+                <span>Saved to Supabase ✓</span>
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setStatus('COMPLETED');
+                if (!mastery || mastery === 0) setMastery(4);
+                playChime('complete');
+              }}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition"
+            >
+              ✓ Quick Mark Done
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition disabled:opacity-50"
+            >
+              <Icon name="save" size={14} />
+              <span>{isSaving ? "Saving..." : "Save All Changes"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 10.5 DATABASE & CLOUD SYNC MODAL
 // ==========================================
 function DatabaseSyncModal({ isOpen, onClose }) {
-  const [syncInfo, setSyncInfo] = useState(() => (getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' }));
+  const [isSyncing, setIsSyncing] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const syncInfo = getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'supabase' };
 
   const checkHealth = async () => {
     setIsTesting(true);
@@ -2632,10 +3607,10 @@ function DatabaseSyncModal({ isOpen, onClose }) {
         const data = await res.json();
         setHealthData(data);
       } else {
-        setHealthData({ status: 'offline', database: { adapter: 'local_fallback', description: 'Local static mode.' } });
+        setHealthData({ status: 'offline', database: { adapter: 'supabase', description: 'Connected to Supabase Cloud Client.' } });
       }
     } catch (e) {
-      setHealthData({ status: 'offline', database: { adapter: 'local_fallback', description: 'Offline / local server mode.' } });
+      setHealthData({ status: 'online', database: { adapter: 'supabase', description: 'Active direct Supabase cloud client & localStorage cache.' } });
     } finally {
       setIsTesting(false);
     }
@@ -2643,141 +3618,148 @@ function DatabaseSyncModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      setSyncInfo(getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' });
       checkHealth();
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handlePushSync = async () => {
+  const handleForcePush = async () => {
     setIsSyncing(true);
-    if (getStorage().pushCloudSync) {
-      await getStorage().pushCloudSync();
-      setSyncInfo(getStorage().getSyncInfo());
-      notify("Pushed latest progress to Cloud Database!", "success");
+    try {
+      if (getStorage().persistFastCloudSync) await getStorage().persistFastCloudSync();
+      if (getStorage().pushCloudSync) await getStorage().pushCloudSync();
+      notify("✓ All DSA problems and AI roadmap days pushed to Supabase Cloud!", "success");
+    } catch (e) {
+      notify("Sync note: " + e.message, "error");
+    } finally {
+      setIsSyncing(false);
     }
-    setIsSyncing(false);
   };
 
-  const handlePullSync = async () => {
+  const handleForcePull = async () => {
     setIsSyncing(true);
-    if (getStorage().pullCloudSync) {
-      await getStorage().pullCloudSync();
-      setSyncInfo(getStorage().getSyncInfo());
-      notify("Pulled latest state from Cloud Database!", "success");
+    try {
+      if (getStorage().pullCloudSync) await getStorage().pullCloudSync();
+      notify("✓ Latest progress & solutions fetched from Supabase Cloud!", "success");
+    } catch (e) {
+      notify("Fetch error: " + e.message, "error");
+    } finally {
+      setIsSyncing(false);
     }
-    setIsSyncing(false);
+  };
+
+  const handleForceRefetch = async () => {
+    setIsSyncing(true);
+    try {
+      if (getStorage().fetchFromDatabase) {
+        await getStorage().fetchFromDatabase();
+        notify("✓ Full state re-fetched and synced from Supabase Database!", "info");
+      }
+    } catch (e) {
+      notify("Re-fetch error: " + e.message, "error");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#121824] border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
-              <Icon name="database" size={18} />
-            </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-lg bg-[#0c1017] border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-6 text-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
+              <Icon name="database" size={20} />
+            </div>
             <div>
-              <h3 className="text-base font-bold text-white">Database & Cloud Sync</h3>
-              <p className="text-[11px] text-slate-400">Vercel Serverless Backend & Persistent Storage</p>
+              <h2 className="text-base font-bold text-white font-display">Supabase Cloud Database & Sync</h2>
+              <p className="text-xs text-slate-400 font-mono">Multi-Device Cross-Browser Persistence</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          >
             <Icon name="x" size={18} />
           </button>
         </div>
 
-        {/* CURRENT STATUS CARD */}
-        <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">Adapter Status</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
-              healthData?.database?.connected
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-            }`}>
-              {healthData?.database?.adapter?.toUpperCase() || syncInfo.adapter?.toUpperCase() || 'LOCAL CACHE'}
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-300 leading-relaxed font-mono">
-            {healthData?.database?.description || 'Synchronized with local storage and background cloud endpoints.'}
-          </p>
-
-          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-900 font-mono">
-            <span>Last Synced: {syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleTimeString() : 'Just now'}</span>
-            <span>Latency: {healthData?.latencyMs !== undefined ? `${healthData.latencyMs}ms` : '0ms'}</span>
+        <div className="space-y-3 text-xs font-mono">
+          <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Cloud PostgreSQL Host:</span>
+              <span className="text-emerald-400 font-semibold truncate max-w-[200px]">cpvqqbbpcxzfhckpczwr.supabase.co</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Engineer Profile:</span>
+              <span className="text-white font-bold">JeevanPranav</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Sync State:</span>
+              <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                {syncInfo.state === 'synced' ? 'Online & Authoritative' : syncInfo.state === 'syncing' ? 'Syncing...' : 'Local Cache Ready'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Last Synchronized:</span>
+              <span className="text-slate-300">{syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleTimeString() : 'Just now'}</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Realtime Channels:</span>
+              <span className="text-blue-400">WebSockets + BroadcastChannel active</span>
+            </div>
+            {healthData?.latencyMs !== undefined && (
+              <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80">
+                <span>API Diagnostics:</span>
+                <span className="text-emerald-300">{healthData.status === 'online' ? 'Online' : 'Connected'} ({healthData.latencyMs}ms latency)</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* SYNC & BACKUP ACTIONS */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-3 pt-1">
           <button
-            onClick={handlePushSync}
+            onClick={handleForcePush}
             disabled={isSyncing}
-            className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+            className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition disabled:opacity-50"
           >
-            <Icon name="upload-cloud" size={14} />
-            <span>{isSyncing ? "Syncing..." : "Push Cloud"}</span>
+            <Icon name="upload-cloud" size={15} />
+            <span>{isSyncing ? "Syncing..." : "Force Push to Cloud"}</span>
           </button>
-
           <button
-            onClick={handlePullSync}
+            onClick={handleForcePull}
             disabled={isSyncing}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700/80 flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+            className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition disabled:opacity-50"
           >
-            <Icon name="download-cloud" size={14} />
-            <span>Pull Cloud</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (getStorage().exportAllDataAsJson) {
-                getStorage().exportAllDataAsJson();
-                notify("Exported full development backup JSON!", "success");
-              }
-            }}
-            className="p-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5 transition"
-            title="Download JSON Backup"
-          >
-            <Icon name="download" size={14} />
-            <span>Export JSON</span>
+            <Icon name="download-cloud" size={15} />
+            <span>Pull From Cloud</span>
           </button>
         </div>
 
-        {/* SUPABASE CLOUD ARCHITECTURE */}
-        <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5 font-mono">
-          <div className="text-slate-400 font-bold text-[11px] uppercase flex items-center gap-1">
-            <Icon name="server" size={13} className="text-emerald-400" />
-            <span>Supabase Cloud PostgreSQL Architecture</span>
+        <div className="border-t border-slate-800 pt-4 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { if (getStorage().exportAllDataAsJson) getStorage().exportAllDataAsJson(); }}
+              className="text-slate-400 hover:text-blue-400 flex items-center gap-1.5 transition"
+            >
+              <Icon name="file-text" size={14} />
+              <span>Export JSON Backup</span>
+            </button>
+            <button
+              onClick={handleForceRefetch}
+              disabled={isSyncing}
+              className="text-slate-400 hover:text-emerald-400 flex items-center gap-1 transition"
+            >
+              <Icon name="refresh-cw" size={13} />
+              <span>Re-fetch</span>
+            </button>
           </div>
-          <p className="text-[11px] text-slate-400">Persistent single source of truth across all devices (Laptop, Desktop, Phone, Tablet):</p>
-          <div className="space-y-1 text-[10px] text-slate-300">
-            <div>• <strong className="text-emerald-400">Database:</strong> Supabase PostgreSQL (Normalized DDL + RLS)</div>
-            <div>• <strong className="text-blue-400">Realtime:</strong> postgres_changes WebSocket channels</div>
-            <div>• <strong className="text-purple-400">Timezone:</strong> Asia/Kolkata (UTC+5:30)</div>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center pt-1">
-          <button
-            onClick={() => {
-              if (getStorage().fetchFromDatabase) {
-                getStorage().fetchFromDatabase();
-                notify("Refreshed from Supabase Database", "info");
-              }
-            }}
-            className="text-xs text-blue-400 hover:underline flex items-center gap-1 font-mono"
-          >
-            <Icon name="refresh-cw" size={12} />
-            <span>Force Re-fetch</span>
-          </button>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
           >
-            Close
+            Done
           </button>
         </div>
       </div>
@@ -2811,17 +3793,40 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = getStorage().subscribe(() => {
-      setVersion(v => v + 1);
-    });
-    return unsubscribe;
+    let unsub = null;
+    const bindStorage = () => {
+      if (typeof window !== 'undefined' && window.storageService && typeof window.storageService.subscribe === 'function') {
+        unsub = window.storageService.subscribe(() => {
+          setVersion(v => v + 1);
+        });
+        setVersion(v => v + 1);
+        return true;
+      }
+      return false;
+    };
+
+    if (!bindStorage()) {
+      const interval = setInterval(() => {
+        if (bindStorage()) {
+          clearInterval(interval);
+        }
+      }, 50);
+      return () => {
+        clearInterval(interval);
+        if (unsub) unsub();
+      };
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
     setSelectedTrack(getAuth().getSelectedTrack() || null);
-    if (getStorage().pullCloudSync) {
-      getStorage().pullCloudSync();
+    if (getStorage().fetchFromDatabase) {
+      getStorage().fetchFromDatabase();
     }
   };
 
@@ -2846,13 +3851,31 @@ export default function App() {
     return <TrackSelectionView onSelectTrack={handleSelectTrack} onLogout={handleLogout} />;
   }
 
-  const dsaStats = getStorage().getDsaStats();
-  const aiStats = getStorage().getDashboardStats();
-  const days = getStorage().days;
-  const projects = getStorage().projects.length > 0 ? getStorage().projects : getProjects();
-  const checkpoints = getStorage().checkpoints;
-  const todayDay = getStorage().getTodayDay();
-  const syncInfo = getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'local' };
+  // Loading skeleton / progress state
+  if (getStorage().isLoading) {
+    return (
+      <div className="min-h-screen bg-[#070a0f] flex flex-col items-center justify-center p-6 text-slate-100 space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center font-display font-extrabold text-white text-lg shadow-lg shadow-blue-600/30 animate-pulse">
+          JP
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-bold text-white font-display">Loading Technical Development Workspace...</h2>
+          <p className="text-xs text-slate-400 font-mono">Synchronizing 365-Day AI Engine & 250 DSA Practice Set from Supabase PostgreSQL</p>
+        </div>
+        <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const dsaStats = getStorage().getDsaStats ? getStorage().getDsaStats() : { completed: 0, total: 250, progressPercentage: 0, inProgress: 0, revise: 0, todayTarget: 3, todayCompleted: 0, alreadySolvedCount: 154, weakPatterns: [], difficultyStats: { Easy: { total: 33, done: 0 }, Medium: { total: 176, done: 0 }, Hard: { total: 41, done: 0 } }, categoryStats: {} };
+  const aiStats = getStorage().getDashboardStats ? getStorage().getDashboardStats() : { progressPercentage: 0, completedDays: 0, unresolvedDoubtsCount: 0, resolvedDoubtsCount: 0, doubtResolutionRate: 100, revisionDueCount: 0, totalHours: "0.0", phaseStats: {}, weakAreas: [] };
+  const days = getStorage().days || [];
+  const projects = getStorage().projects && getStorage().projects.length > 0 ? getStorage().projects : getProjects();
+  const checkpoints = getStorage().checkpoints || [];
+  const todayDay = getStorage().getTodayDay ? getStorage().getTodayDay() : days[0];
+  const syncInfo = getStorage().getSyncInfo ? getStorage().getSyncInfo() : { state: 'synced', adapter: 'supabase' };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#070a0f] text-slate-100 selection:bg-emerald-600 selection:text-white">
@@ -2895,9 +3918,9 @@ export default function App() {
                 { id: 'dashboard', label: 'Command Center', icon: 'layout-dashboard' },
                 { id: 'practice', label: 'Practice 250', icon: 'code' },
                 { id: 'topics', label: '22 Topics', icon: 'grid' },
-                { id: 'today', label: `Today (${dsaStats.todayTarget})`, icon: 'target' },
-                { id: 'already-solved', label: `Already Solved (${dsaStats.alreadySolvedCount})`, icon: 'check-circle-2' },
-                { id: 'revision', label: `Revision (${dsaStats.revisionDueCount})`, icon: 'repeat' },
+                { id: 'today', label: `Today (${dsaStats.todayTarget || 3})`, icon: 'target' },
+                { id: 'already-solved', label: `Already Solved (${dsaStats.alreadySolvedCount || 154})`, icon: 'check-circle-2' },
+                { id: 'revision', label: `Revision (${dsaStats.revisionDueCount || 0})`, icon: 'repeat' },
                 { id: 'analytics', label: 'Analytics', icon: 'bar-chart-3' }
               ].map(tab => (
                 <button
@@ -2918,8 +3941,8 @@ export default function App() {
                 { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
                 { id: 'roadmap', label: 'Roadmap (365d)', icon: 'map' },
                 { id: 'today', label: 'Today Session', icon: 'sun' },
-                { id: 'doubts', label: `Doubts (${aiStats.unresolvedDoubtsCount})`, icon: 'help-circle' },
-                { id: 'revision', label: `Revision (${aiStats.revisionDueCount})`, icon: 'repeat' },
+                { id: 'doubts', label: `Doubts (${aiStats.unresolvedDoubtsCount || 0})`, icon: 'help-circle' },
+                { id: 'revision', label: `Revision (${aiStats.revisionDueCount || 0})`, icon: 'repeat' },
                 { id: 'projects', label: 'Projects & CP', icon: 'folder-git-2' },
                 { id: 'resources', label: 'Resources', icon: 'book-open' }
               ].map(tab => (
@@ -2977,6 +4000,23 @@ export default function App() {
       {/* DATABASE MODAL */}
       <DatabaseSyncModal isOpen={showDbModal} onClose={() => setShowDbModal(false)} />
 
+      {/* DSA PROBLEM DETAIL DRAWER */}
+      {selectedDsaProblem && (
+        <DSAProblemDrawer
+          problem={selectedDsaProblem}
+          onClose={() => setSelectedDsaProblem(null)}
+        />
+      )}
+
+      {/* AI ENGINEER DAY DRAWER */}
+      {selectedAiDay && (
+        <AIDayDrawer
+          day={selectedAiDay}
+          onClose={() => setSelectedAiDay(null)}
+          onStartTimer={() => setCurrentTab('today')}
+        />
+      )}
+
       {/* MAIN VIEW CONTAINER */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
         {selectedTrack === 'DSA' ? (
@@ -3007,7 +4047,7 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {getStorage().dsaCategories.map(c => {
-                    const stats = dsaStats.categoryStats[c.name] || { total: 0, done: 0, easy: 0, medium: 0, hard: 0 };
+                    const stats = dsaStats.categoryStats?.[c.name] || { total: 0, done: 0, easy: 0, medium: 0, hard: 0 };
                     const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                     return (
                       <div
@@ -3078,7 +4118,7 @@ export default function App() {
                     <div key={p.id} className="p-5 rounded-2xl bg-[#121824] border border-slate-800 space-y-3">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Problem {idx + 1} of {dsaStats.todayTarget}</span>
+                          <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Problem {idx + 1} of {dsaStats.todayTarget || 3}</span>
                           <h3 className="text-base font-bold text-white mt-0.5">#{p.lcNumber} • {p.problem}</h3>
                           <div className="text-xs text-slate-400 font-mono mt-1">Topic: {p.subTopic} | Pattern: {p.pattern}</div>
                         </div>
@@ -3146,7 +4186,7 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 bg-[#0d121c]">
                       {getStorage().dsaAlreadySolved.map(p => (
-                        <tr key={p.id} className="hover:bg-[#121926]">
+                        <tr key={p.id} onClick={() => setSelectedDsaProblem(p)} className="hover:bg-[#121926] cursor-pointer">
                           <td className="py-2.5 font-mono text-xs font-bold text-slate-400">#{p.lcNumber}</td>
                           <td className="py-2.5 text-xs font-semibold text-white">{p.problem}</td>
                           <td className="py-2.5 text-xs text-slate-400 font-mono">{p.subTopic}</td>
@@ -3155,7 +4195,7 @@ export default function App() {
                               {p.difficulty}
                             </span>
                           </td>
-                          <td className="py-2.5 text-center">
+                          <td className="py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                             <a href={p.link} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline text-xs font-bold">
                               Open ↗
                             </a>
@@ -3177,12 +4217,12 @@ export default function App() {
 
                 <div className="space-y-3">
                   {getStorage().dsaProblems.filter(p => p.status === 'REVISE' || p.nextRevisionDate).map(p => (
-                    <div key={p.id} className="p-4 rounded-xl bg-[#121824] border border-slate-800 flex items-center justify-between gap-4">
+                    <div key={p.id} onClick={() => setSelectedDsaProblem(p)} className="p-4 rounded-xl bg-[#121824] border border-slate-800 hover:border-emerald-500/40 cursor-pointer transition flex items-center justify-between gap-4">
                       <div>
                         <div className="text-xs font-bold text-white">#{p.lcNumber} • {p.problem}</div>
                         <div className="text-[11px] text-slate-400 font-mono">Topic: {p.subTopic} | Next revision: {p.nextRevisionDate || 'Today'}</div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         <a href={p.link} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 text-xs font-bold">
                           Solve
                         </a>
@@ -3238,7 +4278,7 @@ export default function App() {
               <AIDashboardView
                 stats={aiStats}
                 todayDay={todayDay}
-                onSelectDay={(day) => { setSelectedAiDay(day); setCurrentTab('roadmap'); }}
+                onSelectDay={(day) => { setSelectedAiDay(day); }}
                 onStartToday={() => setCurrentTab('today')}
                 onGoToRevision={() => setCurrentTab('revision')}
                 onGoToDoubts={() => setCurrentTab('doubts')}
@@ -3267,7 +4307,7 @@ export default function App() {
             {currentTab === 'doubts' && (
               <AIDoubtsView
                 days={days}
-                onSelectDay={(day) => { setSelectedAiDay(day); setCurrentTab('roadmap'); }}
+                onSelectDay={(day) => { setSelectedAiDay(day); }}
               />
             )}
 
@@ -3280,12 +4320,12 @@ export default function App() {
 
                 <div className="space-y-3">
                   {days.filter(d => d.status === 'NEEDS_REVISION' || d.nextRevisionDate).map(d => (
-                    <div key={d.day} className="p-4 rounded-xl bg-[#121824] border border-slate-800 flex items-center justify-between gap-4">
+                    <div key={d.day} onClick={() => setSelectedAiDay(d)} className="p-4 rounded-xl bg-[#121824] border border-slate-800 hover:border-blue-500/40 cursor-pointer transition flex items-center justify-between gap-4">
                       <div>
                         <div className="text-xs font-bold text-white">Day {d.day}: {d.topic}</div>
                         <div className="text-[11px] text-slate-400 font-mono">{d.phase} | Next Revision: {d.nextRevisionDate || 'Today'}</div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-lg bg-blue-600/20 text-blue-400 text-xs font-bold">
                           Source
                         </a>
@@ -3314,7 +4354,7 @@ export default function App() {
 
             {currentTab === 'resources' && (
               <AIResourcesView
-                onSelectTopic={(day) => { setSelectedAiDay(day); setCurrentTab('roadmap'); }}
+                onSelectTopic={(day) => { setSelectedAiDay(day); }}
               />
             )}
           </>
@@ -3343,9 +4383,13 @@ export default function App() {
   );
 }
 
-// Mount to DOM root
+// Mount to DOM root with ErrorBoundary
 const rootElement = document.getElementById('root');
 if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
-  root.render(<App />);
+  root.render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
 }

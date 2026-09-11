@@ -134,32 +134,41 @@ code, pre, .font-mono {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1.5px solid #334155;
   background: rgba(15, 23, 42, 0.6);
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .status-checkbox:hover {
   transform: scale(1.15);
   border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .status-checkbox.checked {
-  border-color: #10b981;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  border-color: #10b981 !important;
+  background: #064e3b !important;
+  color: #34d399 !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45) !important;
+}
+
+.status-checkbox.checked svg {
+  stroke: #34d399 !important;
+  color: #34d399 !important;
+  stroke-width: 3.5px !important;
 }
 
 .status-checkbox.in-progress {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #60a5fa !important;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3) !important;
 }
 
 .status-checkbox.needs-revision {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3) !important;
 }
 
 /* Phase Accordion Container */
