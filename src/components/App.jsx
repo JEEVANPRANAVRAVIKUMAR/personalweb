@@ -2840,11 +2840,20 @@ function DSAProblemDrawer({ problem, onClose }) {
 
   const handleQuickDone = () => {
     const today = new Date().toISOString().split('T')[0];
+    const newMastery = mastery && mastery > 0 ? mastery : 4;
+    const newAttempts = attempts && attempts > 0 ? attempts : 1;
     setStatus('DONE');
     setDateSolved(today);
-    if (!mastery || mastery === 0) setMastery(4);
-    if (!attempts || attempts === 0) setAttempts(1);
+    setMastery(newMastery);
+    setAttempts(newAttempts);
+    getStorage().updateDsaProblem(problem.id, {
+      status: 'DONE',
+      dateSolved: today,
+      mastery: newMastery,
+      attempts: newAttempts
+    });
     playChime('complete');
+    notify(`Problem #${problem.lcNumber} marked Done!`, 'success');
   };
 
   return (

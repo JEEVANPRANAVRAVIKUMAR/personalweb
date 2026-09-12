@@ -84,7 +84,7 @@ class StorageService {
 
       // Cache non-default DSA problems progress
       const dsaCache = this.dsaProblems
-        .filter(p => p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0)
+        .filter(p => p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0 || p.approach || p.code)
         .map(p => ({
           id: p.id,
           lcNumber: p.lcNumber,
@@ -94,7 +94,14 @@ class StorageService {
           notes: p.notes,
           mistakes: p.mistakes,
           dateSolved: p.dateSolved,
-          nextRevisionDate: p.nextRevisionDate
+          nextRevisionDate: p.nextRevisionDate,
+          approach: p.approach || '',
+          code: p.code || '',
+          codeLang: p.codeLang || 'Java',
+          timeComplexity: p.timeComplexity || '',
+          spaceComplexity: p.spaceComplexity || '',
+          explanation: p.explanation || '',
+          isBookmarked: Boolean(p.isBookmarked)
         }));
       localStorage.setItem(STORAGE_KEY_DSA_CACHE, JSON.stringify(dsaCache));
     } catch (e) {
@@ -114,19 +121,26 @@ class StorageService {
       if (rawAi) {
         const cachedAiList = JSON.parse(rawAi);
         if (Array.isArray(cachedAiList)) {
-          const cacheMap = new Map(cachedAiList.map(item => [item.day, item]));
+          const cacheMap = new Map();
+          cachedAiList.forEach(item => {
+            if (item.day !== undefined) {
+              cacheMap.set(item.day, item);
+              cacheMap.set(String(item.day), item);
+              cacheMap.set(Number(item.day), item);
+            }
+          });
           this.days = this.days.map(d => {
-            const cached = cacheMap.get(d.day);
+            const cached = cacheMap.get(d.day) || cacheMap.get(Number(d.day)) || cacheMap.get(String(d.day));
             if (cached) {
               return {
                 ...d,
                 status: cached.status || d.status,
                 mastery: cached.mastery !== undefined ? cached.mastery : d.mastery,
-                remarks: cached.remarks || d.remarks,
-                notes: cached.notes || d.notes,
-                completedAt: cached.completedAt || d.completedAt,
-                nextRevisionDate: cached.nextRevisionDate || d.nextRevisionDate,
-                timeSpentMinutes: cached.timeSpentMinutes || d.timeSpentMinutes,
+                remarks: cached.remarks !== undefined ? cached.remarks : d.remarks,
+                notes: cached.notes !== undefined ? cached.notes : d.notes,
+                completedAt: cached.completedAt !== undefined ? cached.completedAt : d.completedAt,
+                nextRevisionDate: cached.nextRevisionDate !== undefined ? cached.nextRevisionDate : d.nextRevisionDate,
+                timeSpentMinutes: cached.timeSpentMinutes !== undefined ? cached.timeSpentMinutes : d.timeSpentMinutes,
                 doubts: (cached.doubts && cached.doubts.length > 0) ? cached.doubts : (d.doubts || [])
               };
             }
@@ -140,19 +154,38 @@ class StorageService {
       if (rawDsa) {
         const cachedDsaList = JSON.parse(rawDsa);
         if (Array.isArray(cachedDsaList)) {
-          const cacheMap = new Map(cachedDsaList.map(item => [item.id || item.lcNumber, item]));
+          const cacheMap = new Map();
+          cachedDsaList.forEach(item => {
+            if (item.id !== undefined) {
+              cacheMap.set(item.id, item);
+              cacheMap.set(String(item.id), item);
+              cacheMap.set(Number(item.id), item);
+            }
+            if (item.lcNumber !== undefined) {
+              cacheMap.set(item.lcNumber, item);
+              cacheMap.set(String(item.lcNumber), item);
+              cacheMap.set(Number(item.lcNumber), item);
+            }
+          });
           this.dsaProblems = this.dsaProblems.map(p => {
-            const cached = cacheMap.get(p.id) || cacheMap.get(p.lcNumber);
+            const cached = cacheMap.get(p.id) || cacheMap.get(p.lcNumber) || cacheMap.get(Number(p.id)) || cacheMap.get(Number(p.lcNumber)) || cacheMap.get(String(p.id)) || cacheMap.get(String(p.lcNumber));
             if (cached) {
               return {
                 ...p,
                 status: cached.status || p.status,
                 mastery: cached.mastery !== undefined ? cached.mastery : p.mastery,
                 attempts: cached.attempts !== undefined ? cached.attempts : p.attempts,
-                notes: cached.notes || p.notes,
-                mistakes: cached.mistakes || p.mistakes,
-                dateSolved: cached.dateSolved || p.dateSolved,
-                nextRevisionDate: cached.nextRevisionDate || p.nextRevisionDate
+                notes: cached.notes !== undefined ? cached.notes : p.notes,
+                mistakes: cached.mistakes !== undefined ? cached.mistakes : p.mistakes,
+                dateSolved: cached.dateSolved !== undefined ? cached.dateSolved : p.dateSolved,
+                nextRevisionDate: cached.nextRevisionDate !== undefined ? cached.nextRevisionDate : p.nextRevisionDate,
+                approach: cached.approach !== undefined ? cached.approach : (p.approach || ''),
+                code: cached.code !== undefined ? cached.code : (p.code || ''),
+                codeLang: cached.codeLang !== undefined ? cached.codeLang : (p.codeLang || 'Java'),
+                timeComplexity: cached.timeComplexity !== undefined ? cached.timeComplexity : (p.timeComplexity || ''),
+                spaceComplexity: cached.spaceComplexity !== undefined ? cached.spaceComplexity : (p.spaceComplexity || ''),
+                explanation: cached.explanation !== undefined ? cached.explanation : (p.explanation || ''),
+                isBookmarked: cached.isBookmarked !== undefined ? cached.isBookmarked : (p.isBookmarked || false)
               };
             }
             return p;
@@ -188,10 +221,14 @@ class StorageService {
     // 4. Re-apply any local cached items that might not have reached cloud yet
     this.loadLocalCache();
 
-    // 5. Check for one-time migration of previous local storage
+    // 5. Save reconciled state locally and push to cloud
+    this.persistLocalCache();
+    this.persistFastCloudSync();
+
+    // 6. Check for one-time migration of previous local storage
     await this.checkAndMigrateLegacyLocalStorage();
 
-    // 6. Setup Supabase Realtime Channels
+    // 7. Setup Supabase Realtime Channels
     this.setupRealtimeSubscriptions();
 
     this.isLoading = false;
@@ -282,17 +319,53 @@ class StorageService {
 
         if (!syncErr && syncDoc) {
           if (Array.isArray(syncDoc.dsa_problems) && syncDoc.dsa_problems.length > 0) {
-            const syncMap = new Map(syncDoc.dsa_problems.map(p => [p.id || p.lcNumber, p]));
+            const syncMap = new Map();
+            syncDoc.dsa_problems.forEach(p => {
+              if (p.id !== undefined) {
+                syncMap.set(p.id, p);
+                syncMap.set(String(p.id), p);
+              }
+              if (p.lcNumber !== undefined) {
+                syncMap.set(p.lcNumber, p);
+                syncMap.set(String(p.lcNumber), p);
+              }
+            });
             this.dsaProblems = this.dsaProblems.map(p => {
-              const cloudItem = syncMap.get(p.id) || syncMap.get(p.lcNumber);
-              return cloudItem ? { ...p, ...cloudItem } : p;
+              const cloudItem = syncMap.get(p.id) || syncMap.get(p.lcNumber) || syncMap.get(String(p.id)) || syncMap.get(String(p.lcNumber));
+              if (cloudItem) {
+                const cloudHasProg = cloudItem.status !== 'NOT_STARTED' || cloudItem.notes || cloudItem.mistakes || cloudItem.attempts > 0 || cloudItem.mastery > 0 || cloudItem.approach || cloudItem.code;
+                const localHasProg = p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0 || p.approach || p.code;
+                if (cloudHasProg) {
+                  return { ...p, ...cloudItem };
+                } else if (localHasProg) {
+                  return p; // Preserve local progress!
+                }
+                return { ...p, ...cloudItem };
+              }
+              return p;
             });
           }
           if (Array.isArray(syncDoc.ai_days) && syncDoc.ai_days.length > 0) {
-            const syncMap = new Map(syncDoc.ai_days.map(d => [d.day, d]));
+            const syncMap = new Map();
+            syncDoc.ai_days.forEach(d => {
+              if (d.day !== undefined) {
+                syncMap.set(d.day, d);
+                syncMap.set(String(d.day), d);
+              }
+            });
             this.days = this.days.map(d => {
-              const cloudItem = syncMap.get(d.day);
-              return cloudItem ? { ...d, ...cloudItem } : d;
+              const cloudItem = syncMap.get(d.day) || syncMap.get(String(d.day));
+              if (cloudItem) {
+                const cloudHasProg = cloudItem.status !== 'NOT_STARTED' || cloudItem.remarks || cloudItem.notes || cloudItem.mastery > 0 || (cloudItem.doubts && cloudItem.doubts.length > 0);
+                const localHasProg = d.status !== 'NOT_STARTED' || d.remarks || d.notes || d.mastery > 0 || (d.doubts && d.doubts.length > 0);
+                if (cloudHasProg) {
+                  return { ...d, ...cloudItem };
+                } else if (localHasProg) {
+                  return d; // Preserve local progress!
+                }
+                return { ...d, ...cloudItem };
+              }
+              return d;
             });
           }
           if (syncDoc.settings && typeof syncDoc.settings === 'object' && Object.keys(syncDoc.settings).length > 0) {
@@ -306,13 +379,19 @@ class StorageService {
       // 2. Fetch Granular DSA Problems & User Progress
       const dsaResult = await DsaService.getMergedProblems(userId);
       if (dsaResult.success && Array.isArray(dsaResult.data) && dsaResult.data.length > 0) {
-        if (!this.dsaProblems || this.dsaProblems.length === 0 || this.dsaProblems.length < dsaResult.data.length) {
-          this.dsaProblems = dsaResult.data;
-        } else {
-          const granularMap = new Map(dsaResult.data.map(p => [p.id || p.lcNumber, p]));
+        const cloudProgressProblems = dsaResult.data.filter(p => p.status !== 'NOT_STARTED' || p.notes || p.mistakes || p.attempts > 0 || p.mastery > 0 || p.approach || p.code);
+        if (cloudProgressProblems.length > 0) {
+          const granularMap = new Map();
+          cloudProgressProblems.forEach(p => {
+            if (p.id !== undefined) granularMap.set(p.id, p);
+            if (p.lcNumber !== undefined) granularMap.set(p.lcNumber, p);
+          });
           this.dsaProblems = this.dsaProblems.map(p => {
             const gItem = granularMap.get(p.id) || granularMap.get(p.lcNumber);
-            return gItem ? { ...p, ...gItem } : p;
+            if (gItem) {
+              return { ...p, ...gItem };
+            }
+            return p;
           });
         }
       }
@@ -326,13 +405,18 @@ class StorageService {
       // 4. Fetch AI Roadmap Days, Progress & Doubts
       const aiResult = await AiService.getMergedRoadmapDays(userId);
       if (aiResult.success && Array.isArray(aiResult.data) && aiResult.data.length > 0) {
-        if (!this.days || this.days.length === 0 || this.days.length < aiResult.data.length) {
-          this.days = aiResult.data;
-        } else {
-          const granularAiMap = new Map(aiResult.data.map(d => [d.day, d]));
+        const cloudProgressDays = aiResult.data.filter(d => d.status !== 'NOT_STARTED' || d.remarks || d.notes || d.mastery > 0 || (d.doubts && d.doubts.length > 0));
+        if (cloudProgressDays.length > 0) {
+          const granularAiMap = new Map();
+          cloudProgressDays.forEach(d => {
+            if (d.day !== undefined) granularAiMap.set(d.day, d);
+          });
           this.days = this.days.map(d => {
             const gItem = granularAiMap.get(d.day);
-            return gItem ? { ...d, ...gItem } : d;
+            if (gItem) {
+              return { ...d, ...gItem };
+            }
+            return d;
           });
         }
       }
@@ -343,7 +427,11 @@ class StorageService {
         this.projects = projResult.projects;
       }
 
+      // Re-apply local cache to preserve any offline progress
+      this.loadLocalCache();
       this.persistLocalCache();
+      this.persistFastCloudSync();
+
       this.syncState = 'synced';
       this.lastSyncedAt = new Date().toISOString();
       this.lastError = null;

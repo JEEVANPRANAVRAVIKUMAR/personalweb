@@ -214,8 +214,7 @@ class AuthService {
   }
 
   getUserId() {
-    const user = this.getCurrentUser();
-    return user ? (user.id || user.username || "JeevanPranav") : "JeevanPranav";
+    return AUTH_CONFIG.USERNAME || "JeevanPranav";
   }
 
   getCachedSession() {
